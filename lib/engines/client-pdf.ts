@@ -318,23 +318,69 @@ async function recompressPdfPages(
   return bytesToBlob(resultBytes, "application/pdf");
 }
 
-// 4. Split PDF into individual single-page documents with object stream compression
-export async function splitSinglePDF(file: File): Promise<{ name: string; blob: Blob }[]> {
+// 4. Split PDF into chunks with flexible options:
+//    - splitMode "pages-each"  → one file per page (legacy default)
+//    - splitMode "num-splits"  → divide into `numSplits` equal chunks
+//    - splitMode "pages-per-split" → extract `pagesPerSplit` consecutive pages
+//      starting at `startPage` (1-indexed) into a single output file
+export async function splitSinglePDF(
+  file: File,
+  options?: {
+    splitMode?: "pages-each" | "num-splits" | "pages-per-split";
+    numSplits?: number;
+    pagesPerSplit?: number;
+    startPage?: number; // 1-indexed; only used for "pages-per-split"
+  }
+): Promise<{ name: string; blob: Blob }[]> {
   const arrayBuffer = await file.arrayBuffer();
   const pdfDoc = await loadPdfFromBuffer(arrayBuffer);
   const pageCount = pdfDoc.getPageCount();
   const baseName = file.name.replace(/\.[^/.]+$/, "");
   const results: { name: string; blob: Blob }[] = [];
 
-  for (let i = 0; i < pageCount; i++) {
-    const singleDoc = await PDFDocument.create();
-    const [copiedPage] = await singleDoc.copyPages(pdfDoc, [i]);
-    singleDoc.addPage(copiedPage);
-    const bytes = await singleDoc.save({ useObjectStreams: true });
-    results.push({
-      name: `${baseName}-page-${i + 1}.pdf`,
-      blob: bytesToBlob(bytes, "application/pdf"),
-    });
+  const mode = options?.splitMode ?? "pages-each";
+
+  // Helper: build a PDF blob from a range of 0-indexed page indices
+  const buildChunk = async (indices: number[], label: string): Promise<{ name: string; blob: Blob }> => {
+    const chunkDoc = await PDFDocument.create();
+    const copied = await chunkDoc.copyPages(pdfDoc, indices);
+    copied.forEach((p) => chunkDoc.addPage(p));
+    const bytes = await chunkDoc.save({ useObjectStreams: true });
+    return { name: `${baseName}-${label}.pdf`, blob: bytesToBlob(bytes, "application/pdf") };
+  };
+
+  if (mode === "num-splits") {
+    // Divide the document into `numSplits` as-equal-as-possible chunks
+    const n = Math.max(1, Math.min(options?.numSplits ?? 2, pageCount));
+    const baseSize = Math.floor(pageCount / n);
+    const remainder = pageCount % n;
+    let cursor = 0;
+    for (let part = 0; part < n; part++) {
+      const chunkSize = baseSize + (part < remainder ? 1 : 0);
+      if (chunkSize === 0) continue;
+      const indices = Array.from({ length: chunkSize }, (_, k) => cursor + k);
+      cursor += chunkSize;
+      const startP = indices[0] + 1;
+      const endP = indices[indices.length - 1] + 1;
+      const label = n === 1 ? "split" : `part-${part + 1}_pages-${startP}-${endP}`;
+      results.push(await buildChunk(indices, label));
+    }
+  } else if (mode === "pages-per-split") {
+    // Extract exactly `pagesPerSplit` pages starting from `startPage`
+    const pps = Math.max(1, options?.pagesPerSplit ?? 1);
+    const start0 = Math.max(0, (options?.startPage ?? 1) - 1); // convert to 0-indexed
+    const end0 = Math.min(pageCount - 1, start0 + pps - 1);
+    if (start0 >= pageCount) {
+      throw new Error(`Start page ${start0 + 1} exceeds document length (${pageCount} pages).`);
+    }
+    const indices = Array.from({ length: end0 - start0 + 1 }, (_, k) => start0 + k);
+    const label = `pages-${start0 + 1}-${end0 + 1}`;
+    results.push(await buildChunk(indices, label));
+  } else {
+    // Default legacy mode: one file per page
+    for (let i = 0; i < pageCount; i++) {
+      results.push(await buildChunk([i], `page-${i + 1}`));
+    }
   }
 
   return results;

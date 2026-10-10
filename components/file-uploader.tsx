@@ -78,6 +78,13 @@ export function FileUploader({
   const [pdfPassword, setPdfPassword] = useState<string>("password123");
   const isProtectTool = tool?.id === "protect-pdf";
 
+  // Split PDF options
+  const isSplitTool = tool?.id === "split-pdf";
+  const [splitMode, setSplitMode] = useState<"pages-each" | "num-splits" | "pages-per-split">("pages-each");
+  const [numSplits, setNumSplits] = useState<number>(2);
+  const [pagesPerSplit, setPagesPerSplit] = useState<number>(1);
+  const [splitStartPage, setSplitStartPage] = useState<number>(1);
+
   // Mode: strictly 'merge' for merge-pdf, toggleable only for image-to-pdf
   const isMergeOnly = tool?.id === "merge-pdf";
   const allowsMergeToggle = tool?.id === "image-to-pdf";
@@ -192,7 +199,12 @@ export function FileUploader({
 
     // 6. Split PDF
     if (toolId === "split-pdf") {
-      const parts = await splitSinglePDF(rawFile);
+      const parts = await splitSinglePDF(rawFile, {
+        splitMode,
+        numSplits,
+        pagesPerSplit,
+        startPage: splitStartPage,
+      });
       if (parts.length === 1) {
         return { blob: parts[0].blob, fileName: parts[0].name };
       }
@@ -505,6 +517,97 @@ export function FileUploader({
               placeholder="Set PDF Password"
               className="px-2.5 py-1 text-xs bg-muted/70 border border-border/70 rounded-xl outline-none text-foreground font-semibold"
             />
+          </div>
+        )}
+
+        {isSplitTool && (
+          <div className="flex flex-wrap items-center gap-2 self-end md:self-auto">
+            {/* Mode selector */}
+            <div className="flex items-center bg-muted/60 p-0.5 rounded-xl border border-border/60">
+              <span className="text-[11px] font-semibold text-muted-foreground px-1.5 flex items-center gap-1">
+                <Split className="w-3 h-3 text-rose-500" />
+                Split:
+              </span>
+              <button
+                type="button"
+                id="split-mode-pages-each"
+                onClick={() => setSplitMode("pages-each")}
+                className={cn(
+                  "px-2.5 py-1 rounded-lg text-xs font-semibold transition-all",
+                  splitMode === "pages-each"
+                    ? "bg-card text-rose-600 dark:text-rose-400 shadow-sm font-bold"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Every Page
+              </button>
+              <button
+                type="button"
+                id="split-mode-num-splits"
+                onClick={() => setSplitMode("num-splits")}
+                className={cn(
+                  "px-2.5 py-1 rounded-lg text-xs font-semibold transition-all",
+                  splitMode === "num-splits"
+                    ? "bg-card text-rose-600 dark:text-rose-400 shadow-sm font-bold"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                N Equal Parts
+              </button>
+              <button
+                type="button"
+                id="split-mode-pages-per-split"
+                onClick={() => setSplitMode("pages-per-split")}
+                className={cn(
+                  "px-2.5 py-1 rounded-lg text-xs font-semibold transition-all",
+                  splitMode === "pages-per-split"
+                    ? "bg-card text-rose-600 dark:text-rose-400 shadow-sm font-bold"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Page Range
+              </button>
+            </div>
+
+            {/* N Equal Parts input */}
+            {splitMode === "num-splits" && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-muted-foreground whitespace-nowrap">Parts:</span>
+                <input
+                  id="split-num-splits"
+                  type="number"
+                  min={2}
+                  max={500}
+                  value={numSplits}
+                  onChange={(e) => setNumSplits(Math.max(2, parseInt(e.target.value) || 2))}
+                  className="w-16 px-2 py-1 text-xs bg-muted/70 border border-border/70 rounded-xl outline-none text-foreground font-semibold text-center"
+                />
+              </div>
+            )}
+
+            {/* Page Range inputs */}
+            {splitMode === "pages-per-split" && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-muted-foreground whitespace-nowrap">From page:</span>
+                <input
+                  id="split-start-page"
+                  type="number"
+                  min={1}
+                  value={splitStartPage}
+                  onChange={(e) => setSplitStartPage(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-16 px-2 py-1 text-xs bg-muted/70 border border-border/70 rounded-xl outline-none text-foreground font-semibold text-center"
+                />
+                <span className="text-[11px] font-semibold text-muted-foreground whitespace-nowrap">Pages count:</span>
+                <input
+                  id="split-pages-per-split"
+                  type="number"
+                  min={1}
+                  value={pagesPerSplit}
+                  onChange={(e) => setPagesPerSplit(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-16 px-2 py-1 text-xs bg-muted/70 border border-border/70 rounded-xl outline-none text-foreground font-semibold text-center"
+                />
+              </div>
+            )}
           </div>
         )}
       </div>
