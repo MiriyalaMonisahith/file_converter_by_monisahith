@@ -38,6 +38,7 @@ import {
   Cpu,
   Server,
   Sparkles,
+  FileType,
 } from "lucide-react";
 import { ToolDefinition } from "@/types/tools";
 import { cn } from "@/lib/utils";
@@ -74,6 +75,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   EyeOff,
   Palette,
   Sparkles,
+  FileType,
 };
 
 interface ToolCardProps {

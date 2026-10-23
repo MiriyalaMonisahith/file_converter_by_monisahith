@@ -24,6 +24,7 @@ import { ImageResizerStudio } from "./studios/image-resizer-studio";
 import { BlurSensitiveStudio } from "./studios/blur-sensitive-studio";
 import { WatermarkImageStudio } from "./studios/watermark-image-studio";
 import { PaletteExtractorStudio } from "./studios/palette-extractor-studio";
+import { OdtModifierStudio } from "./studios/odt-modifier-studio";
 
 interface ToolModalWrapperProps {
   tool: ToolDefinition | null;
@@ -48,6 +49,8 @@ export function ToolModalWrapper({ tool, onClose }: ToolModalWrapperProps) {
         return <HtmlToPdfStudio />;
 
       // Document Interactive Studios
+      case "odt-modifier":
+        return <OdtModifierStudio />;
       case "txt-to-doc":
         return <TxtToDocStudio />;
       case "markdown-converter":

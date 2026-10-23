@@ -63,7 +63,7 @@ export default function HomePage() {
         <div className="max-w-4xl mx-auto text-center space-y-6">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-semibold tracking-wide">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Open Source Suite &bull; 35 Tools Across 4 Categories &bull; Zero Paywalls</span>
+            <span>Open Source Suite &bull; 41 Tools Across 4 Categories &bull; Zero Paywalls</span>
           </div>
 
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-foreground leading-[1.15]">
@@ -139,9 +139,9 @@ export default function HomePage() {
         {/* Category Filter Tabs */}
         <div className="flex items-center justify-start sm:justify-center overflow-x-auto pb-2 scrollbar-none gap-2">
           {[
-            { id: "all", label: "All 35 Tools" },
+            { id: "all", label: "All 41 Tools" },
             { id: "pdf", label: "PDF Tools (12)" },
-            { id: "document", label: "Document Tools (9)" },
+            { id: "document", label: "Document & ODT (15)" },
             { id: "text", label: "Text Tools (6)" },
             { id: "image", label: "Image Tools (8)" },
           ].map((cat) => {

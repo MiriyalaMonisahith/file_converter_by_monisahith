@@ -28,11 +28,25 @@ export default function DocumentToolsPage() {
 
       const matchesSubfilter =
         selectedSubfilter === "all" ||
+        (selectedSubfilter === "odt-suite" &&
+          (tool.id === "odt-modifier" ||
+            tool.id === "odt-to-pdf" ||
+            tool.id === "pdf-to-odt" ||
+            tool.id === "odt-to-word" ||
+            tool.id === "word-to-odt" ||
+            tool.id === "odt-to-image")) ||
         (selectedSubfilter === "office-pdf" &&
-          (tool.id === "word-to-pdf" || tool.id === "excel-to-pdf" || tool.id === "ppt-to-pdf")) ||
-        (selectedSubfilter === "pdf-to-word" && tool.id === "pdf-to-word") ||
+          (tool.id === "word-to-pdf" ||
+            tool.id === "excel-to-pdf" ||
+            tool.id === "ppt-to-pdf" ||
+            tool.id === "odt-to-pdf")) ||
+        (selectedSubfilter === "pdf-to-word" &&
+          (tool.id === "pdf-to-word" || tool.id === "pdf-to-odt")) ||
         (selectedSubfilter === "office-img" &&
-          (tool.id === "word-to-image" || tool.id === "excel-to-image" || tool.id === "ppt-to-image")) ||
+          (tool.id === "word-to-image" ||
+            tool.id === "excel-to-image" ||
+            tool.id === "ppt-to-image" ||
+            tool.id === "odt-to-image")) ||
         (selectedSubfilter === "markdown" &&
           (tool.id === "txt-to-doc" || tool.id === "markdown-converter"));
 
@@ -57,19 +71,19 @@ export default function DocumentToolsPage() {
         <div className="max-w-4xl mx-auto text-center space-y-6">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-semibold tracking-wide">
             <Presentation className="w-3.5 h-3.5" />
-            <span>Document & Office Suite &bull; Word, Excel, PPT, TXT & Markdown</span>
+            <span>Document & Office Suite &bull; Word, Excel, PPT, ODT, TXT & Markdown</span>
           </div>
 
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-foreground leading-[1.15]">
             Professional Document{" "}
             <span className="bg-gradient-to-r from-blue-600 via-indigo-500 to-cyan-500 bg-clip-text text-transparent">
-              Conversion Suite
+              Conversion & Modification Suite
             </span>
           </h1>
 
           <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            Convert Microsoft Word, Excel spreadsheets, PowerPoint presentations, TXT files, and 
-            Markdown documents to crisp PDFs, images, or editable DOCX files with high fidelity.
+            Convert and modify OpenDocument Text (.odt), Microsoft Word, Excel spreadsheets, PowerPoint presentations, TXT files, and 
+            Markdown documents to crisp PDFs, images, or editable DOCX/ODT files with vector fidelity.
           </p>
         </div>
       </section>
@@ -79,9 +93,10 @@ export default function DocumentToolsPage() {
         {/* Filters */}
         <div className="flex items-center justify-start sm:justify-center overflow-x-auto pb-2 scrollbar-none gap-2">
           {[
-            { id: "all", label: "All Document Tools (9)" },
+            { id: "all", label: "All Document Tools (15)" },
+            { id: "odt-suite", label: "ODT Suite & Studio (6)" },
             { id: "office-pdf", label: "Office to PDF" },
-            { id: "pdf-to-word", label: "PDF to Word" },
+            { id: "pdf-to-word", label: "PDF to Word / ODT" },
             { id: "office-img", label: "Office to Images" },
             { id: "markdown", label: "TXT & Markdown" },
           ].map((pill) => (

@@ -12,7 +12,9 @@ const execFileAsync = promisify(execFile);
 // Search paths for LibreOffice soffice binary on Windows, Linux, and Mac
 function findLibreOfficePath(): string {
   const possiblePaths = [
+    "C:\\Program Files\\LibreOffice\\program\\soffice.com",
     "C:\\Program Files\\LibreOffice\\program\\soffice.exe",
+    "C:\\Program Files (x86)\\LibreOffice\\program\\soffice.com",
     "C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe",
     "/usr/bin/libreoffice",
     "/usr/bin/soffice",

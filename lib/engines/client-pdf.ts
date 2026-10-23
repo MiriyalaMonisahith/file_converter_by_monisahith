@@ -931,4 +931,47 @@ export async function unlockSinglePDF(file: File): Promise<Blob> {
   return bytesToBlob(pdfBytes, "application/pdf");
 }
 
+// 22. Universal Multi-format Document Converter (ODT, PDF, Word DOCX, TXT, HTML)
+export async function convertDocument(
+  file: File,
+  targetFormat: "pdf" | "docx" | "odt" | "txt" | "html"
+): Promise<Blob> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("targetFormat", targetFormat);
+
+  const res = await fetch("/api/convert/document", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    let errorDetail = `Failed to convert document to ${targetFormat.toUpperCase()}`;
+    try {
+      const json = await res.json();
+      errorDetail = json.error || errorDetail;
+    } catch {
+      // fallback
+    }
+    throw new Error(errorDetail);
+  }
+
+  return await res.blob();
+}
+
+// 23. Convert OpenDocument Text (ODT) to raster images (JPG/PNG)
+export async function odtToImages(
+  file: File
+): Promise<{ name: string; blob: Blob }[]> {
+  const pdfBlob = await convertDocument(file, "pdf");
+  const pdfFile = new File([pdfBlob], `${file.name.replace(/\.[^/.]+$/, "")}.pdf`, {
+    type: "application/pdf",
+  });
+  return await pdfToImages(pdfFile);
+}
+
+// Re-export ODT Engine functionalities for in-browser manipulation
+export * from "./odt-engine";
+
+
 

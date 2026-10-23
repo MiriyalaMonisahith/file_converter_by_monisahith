@@ -43,6 +43,8 @@ import {
   officeToImages,
   protectSinglePDF,
   unlockSinglePDF,
+  convertDocument,
+  odtToImages,
 } from "@/lib/engines/client-pdf";
 
 interface FileUploaderProps {
@@ -159,15 +161,15 @@ export function FileUploader({
     const baseName = rawFile.name.replace(/\.[^/.]+$/, "");
     const toolId = tool?.id;
 
-    // 1. Office to PDF converters: Word to PDF, Excel to PDF, PowerPoint to PDF
-    if (toolId === "word-to-pdf" || toolId === "excel-to-pdf" || toolId === "ppt-to-pdf") {
-      const blob = await convertOfficeDocumentToPDF(rawFile);
+    // 1. Office to PDF converters: Word to PDF, Excel to PDF, PowerPoint to PDF, ODT to PDF
+    if (toolId === "word-to-pdf" || toolId === "excel-to-pdf" || toolId === "ppt-to-pdf" || toolId === "odt-to-pdf") {
+      const blob = await convertDocument(rawFile, "pdf");
       return { blob, fileName: `${baseName}.pdf` };
     }
 
-    // 2. Office to Images converters: Word to JPG, Excel to JPG, PPT to JPG
-    if (toolId === "word-to-image" || toolId === "excel-to-image" || toolId === "ppt-to-image") {
-      const parts = await officeToImages(rawFile);
+    // 2. Office to Images converters: Word to JPG, Excel to JPG, PPT to JPG, ODT to JPG
+    if (toolId === "word-to-image" || toolId === "excel-to-image" || toolId === "ppt-to-image" || toolId === "odt-to-image") {
+      const parts = toolId === "odt-to-image" ? await odtToImages(rawFile) : await officeToImages(rawFile);
       if (parts.length === 1) {
         return { blob: parts[0].blob, fileName: parts[0].name };
       }
@@ -175,10 +177,33 @@ export function FileUploader({
       return { blob: zipBlob, fileName: `${baseName}-images.zip` };
     }
 
-    // 3. PDF to Word (DOC format)
+    // 3. PDF to Word (DOCX / DOC format)
     if (toolId === "pdf-to-word") {
-      const blob = await pdfToWord(rawFile);
-      return { blob, fileName: `${baseName}.doc` };
+      try {
+        const blob = await convertDocument(rawFile, "docx");
+        return { blob, fileName: `${baseName}.docx` };
+      } catch {
+        const fallbackBlob = await pdfToWord(rawFile);
+        return { blob: fallbackBlob, fileName: `${baseName}.doc` };
+      }
+    }
+
+    // 3b. PDF to ODT
+    if (toolId === "pdf-to-odt") {
+      const blob = await convertDocument(rawFile, "odt");
+      return { blob, fileName: `${baseName}.odt` };
+    }
+
+    // 3c. ODT to Word (DOCX)
+    if (toolId === "odt-to-word") {
+      const blob = await convertDocument(rawFile, "docx");
+      return { blob, fileName: `${baseName}.docx` };
+    }
+
+    // 3d. Word to ODT
+    if (toolId === "word-to-odt") {
+      const blob = await convertDocument(rawFile, "odt");
+      return { blob, fileName: `${baseName}.odt` };
     }
 
     // 4. PDF to Image (extract pages to images in ZIP or single JPG)
@@ -256,8 +281,8 @@ export function FileUploader({
     }
 
     // Fallback: If it's an office file, convert to PDF; if PDF, optimize; if image, convert
-    if (/\.(pptx?|docx?|xlsx?)$/i.test(rawFile.name)) {
-      const blob = await convertOfficeDocumentToPDF(rawFile);
+    if (/\.(pptx?|docx?|xlsx?|odt|rtf)$/i.test(rawFile.name)) {
+      const blob = await convertDocument(rawFile, "pdf");
       return { blob, fileName: `${baseName}.pdf` };
     }
     const blob = await compressSinglePDF(rawFile, { preset: compressionPreset });
