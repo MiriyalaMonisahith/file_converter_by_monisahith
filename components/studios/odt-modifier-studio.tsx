@@ -27,6 +27,7 @@ import {
   parseOdtFile,
   modifyAndExportOdt,
   createSampleOdtBlob,
+  convertOdtToPdf,
   ParsedOdtDocument,
 } from "@/lib/engines/odt-engine";
 import { convertDocument } from "@/lib/engines/client-pdf";
@@ -230,7 +231,13 @@ export function OdtModifierStudio() {
         type: "application/vnd.oasis.opendocument.text",
       });
 
-      const pdfBlob = await convertDocument(odtFile, "pdf");
+      let pdfBlob: Blob;
+      try {
+        pdfBlob = await convertDocument(odtFile, "pdf");
+      } catch {
+        pdfBlob = await convertOdtToPdf(odtBlob, { title, author: creator, defaultTitle: base });
+      }
+
       const url = URL.createObjectURL(pdfBlob);
       const a = document.createElement("a");
       a.href = url;

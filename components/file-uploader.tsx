@@ -107,18 +107,44 @@ export function FileUploader({
     (acceptedFiles: File[], fileRejections: any[]) => {
       setGlobalError(null);
 
-      if (fileRejections.length > 0) {
-        const rejection = fileRejections[0];
-        const errorMsg =
-          rejection?.errors[0]?.code === "file-invalid-type"
-            ? `Unsupported file format for "${rejection.file.name}".`
-            : rejection?.errors[0]?.message || "Could not upload file.";
-        setGlobalError(errorMsg);
+      // Rescue any files that match allowed extensions even if browser MIME type was generic/empty
+      const rescuedFiles: File[] = [];
+      const actualRejections: any[] = [];
+      const allowedExts: string[] = [];
+
+      if (tool?.acceptedFormats) {
+        Object.values(tool.acceptedFormats).forEach((exts) => {
+          if (Array.isArray(exts)) {
+            allowedExts.push(...exts.map((e) => e.toLowerCase()));
+          }
+        });
       }
 
-      if (acceptedFiles.length === 0) return;
+      if (fileRejections.length > 0) {
+        for (const rej of fileRejections) {
+          const name = rej?.file?.name || "";
+          const ext = `.${name.split(".").pop()?.toLowerCase()}`;
+          if (allowedExts.includes(ext) || (tool?.id === "odt-to-pdf" && ext === ".odt")) {
+            rescuedFiles.push(rej.file);
+          } else {
+            actualRejections.push(rej);
+          }
+        }
 
-      const newItems: UploadedFileItem[] = acceptedFiles.map((file) => ({
+        if (actualRejections.length > 0) {
+          const rejection = actualRejections[0];
+          const errorMsg =
+            rejection?.errors[0]?.code === "file-invalid-type"
+              ? `Unsupported file format for "${rejection.file.name}".`
+              : rejection?.errors[0]?.message || "Could not upload file.";
+          setGlobalError(errorMsg);
+        }
+      }
+
+      const validFiles = [...acceptedFiles, ...rescuedFiles];
+      if (validFiles.length === 0) return;
+
+      const newItems: UploadedFileItem[] = validFiles.map((file) => ({
         id: `${file.name}-${Date.now()}-${Math.random()}`,
         file,
         status: "idle",
@@ -127,7 +153,7 @@ export function FileUploader({
 
       setFileItems((prev) => (multiple ? [...prev, ...newItems] : newItems));
     },
-    [multiple]
+    [multiple, tool]
   );
 
   const dropzoneOptions: DropzoneOptions = {
@@ -163,7 +189,17 @@ export function FileUploader({
 
     // 1. Office to PDF converters: Word to PDF, Excel to PDF, PowerPoint to PDF, ODT to PDF
     if (toolId === "word-to-pdf" || toolId === "excel-to-pdf" || toolId === "ppt-to-pdf" || toolId === "odt-to-pdf") {
-      const blob = await convertDocument(rawFile, "pdf");
+      let blob: Blob;
+      try {
+        blob = await convertDocument(rawFile, "pdf");
+      } catch (convErr) {
+        if (toolId === "odt-to-pdf" || rawFile.name.toLowerCase().endsWith(".odt")) {
+          const { convertOdtToPdf } = await import("@/lib/engines/odt-engine");
+          blob = await convertOdtToPdf(rawFile, { title: baseName, defaultTitle: baseName });
+        } else {
+          throw convErr;
+        }
+      }
       return { blob, fileName: `${baseName}.pdf` };
     }
 

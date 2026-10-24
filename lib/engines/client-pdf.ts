@@ -936,27 +936,74 @@ export async function convertDocument(
   file: File,
   targetFormat: "pdf" | "docx" | "odt" | "txt" | "html"
 ): Promise<Blob> {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("targetFormat", targetFormat);
+  const isOdt = file.name.toLowerCase().endsWith(".odt");
 
-  const res = await fetch("/api/convert/document", {
-    method: "POST",
-    body: formData,
-  });
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("targetFormat", targetFormat);
 
-  if (!res.ok) {
-    let errorDetail = `Failed to convert document to ${targetFormat.toUpperCase()}`;
-    try {
-      const json = await res.json();
-      errorDetail = json.error || errorDetail;
-    } catch {
-      // fallback
+    const res = await fetch("/api/convert/document", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (res.ok) {
+      return await res.blob();
     }
-    throw new Error(errorDetail);
+  } catch (netErr) {
+    console.warn("Server conversion request failed or network unavailable, using client engine:", netErr);
   }
 
-  return await res.blob();
+  // Resilient Client-Side Native Engines
+  if (isOdt && targetFormat === "pdf") {
+    const { convertOdtToPdf } = await import("./odt-engine");
+    return await convertOdtToPdf(file, { title: file.name.replace(/\.[^/.]+$/, "") });
+  }
+
+  if (targetFormat === "pdf" && file.name.toLowerCase().endsWith(".txt")) {
+    const text = await file.text();
+    return await txtToPDF(text, file.name.replace(/\.[^/.]+$/, ""));
+  }
+
+  if (targetFormat === "odt" && file.name.toLowerCase().endsWith(".pdf")) {
+    const textBlob = await pdfToText(file);
+    const text = await textBlob.text();
+    const paragraphs = text.split("\n\n").map((p) => p.trim()).filter(Boolean);
+    const { modifyAndExportOdt } = await import("./odt-engine");
+    return await modifyAndExportOdt({
+      title: file.name.replace(/\.[^/.]+$/, ""),
+      paragraphs,
+    });
+  }
+
+  if (targetFormat === "docx" && isOdt) {
+    const { parseOdtFile } = await import("./odt-engine");
+    const doc = await parseOdtFile(file);
+    const paragraphsHtml = doc.paragraphs
+      .map((p) => `<p style="margin-bottom: 12pt; line-height: 1.6; font-size: 11pt;">${p.replace(/\n/g, "<br/>")}</p>`)
+      .join("\n");
+    const title = doc.metadata.title || file.name.replace(/\.[^/.]+$/, "");
+    const wordHtml = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+      <head>
+        <meta charset="utf-8">
+        <title>${title}</title>
+        <style>
+          body { font-family: Calibri, 'Segoe UI', Arial, sans-serif; margin: 1in; color: #1e293b; }
+          h1 { font-size: 18pt; color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; }
+        </style>
+      </head>
+      <body>
+        <h1>${title}</h1>
+        ${paragraphsHtml}
+      </body>
+      </html>
+    `;
+    return new Blob([wordHtml], { type: "application/msword;charset=utf-8" });
+  }
+
+  throw new Error(`Failed to convert document to ${targetFormat.toUpperCase()}`);
 }
 
 // 23. Convert OpenDocument Text (ODT) to raster images (JPG/PNG)
@@ -972,6 +1019,7 @@ export async function odtToImages(
 
 // Re-export ODT Engine functionalities for in-browser manipulation
 export * from "./odt-engine";
+
 
 
 

@@ -438,6 +438,8 @@ export const TOOLS_REGISTRY: ToolDefinition[] = [
     iconName: "FileText",
     acceptedFormats: {
       "application/vnd.oasis.opendocument.text": [".odt"],
+      "application/x-vnd.oasis.opendocument.text": [".odt"],
+      "application/octet-stream": [".odt"],
     },
     outputFormat: "PDF",
     route: "/tools/odt-to-pdf",
@@ -470,6 +472,8 @@ export const TOOLS_REGISTRY: ToolDefinition[] = [
     iconName: "FileText",
     acceptedFormats: {
       "application/vnd.oasis.opendocument.text": [".odt"],
+      "application/x-vnd.oasis.opendocument.text": [".odt"],
+      "application/octet-stream": [".odt"],
     },
     outputFormat: "DOCX",
     route: "/tools/odt-to-word",
@@ -505,6 +509,8 @@ export const TOOLS_REGISTRY: ToolDefinition[] = [
     iconName: "FileImage",
     acceptedFormats: {
       "application/vnd.oasis.opendocument.text": [".odt"],
+      "application/x-vnd.oasis.opendocument.text": [".odt"],
+      "application/octet-stream": [".odt"],
     },
     outputFormat: "ZIP (Images)",
     route: "/tools/odt-to-image",

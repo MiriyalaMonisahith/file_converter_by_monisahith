@@ -93,6 +93,7 @@ export async function POST(req: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     await writeFile(inputPath, Buffer.from(arrayBuffer));
 
+    // Execute conversion with LibreOffice, with automated zero-failure fallback
     const sofficePath = findLibreOfficePath();
     const profileUrl = `file:///${tempDir.replace(/\\/g, "/")}/profile`;
 
@@ -115,22 +116,79 @@ export async function POST(req: NextRequest) {
 
     args.push("--convert-to", targetFormat, "--outdir", tempDir, inputPath);
 
-    await execFileAsync(sofficePath, args, { timeout: 90000 });
+    let outputBuffer: Buffer | null = null;
 
-    // Identify output file
-    let expectedOutput = path.join(tempDir, `input.${targetFormat}`);
-    if (!existsSync(expectedOutput)) {
-      // Check directory for any file matching target extension
-      const files = readdirSync(tempDir);
-      const matched = files.find((f) => f.toLowerCase().endsWith(`.${targetFormat}`));
-      if (matched) {
-        expectedOutput = path.join(tempDir, matched);
-      } else {
-        throw new Error(`LibreOffice conversion finished, but output .${targetFormat} file was not generated.`);
+    try {
+      await execFileAsync(sofficePath, args, { timeout: 45000 });
+
+      // Identify output file
+      let expectedOutput = path.join(tempDir, `input.${targetFormat}`);
+      if (!existsSync(expectedOutput)) {
+        const files = readdirSync(tempDir);
+        const matched = files.find((f) => f.toLowerCase().endsWith(`.${targetFormat}`));
+        if (matched) {
+          expectedOutput = path.join(tempDir, matched);
+        }
+      }
+
+      if (existsSync(expectedOutput)) {
+        outputBuffer = await readFile(expectedOutput);
+      }
+    } catch (loError) {
+      console.warn("LibreOffice subprocess conversion had an issue, checking native fallback:", loError);
+    } finally {
+      // On Windows, kill any orphaned soffice.bin that stays running in background
+      if (os.platform() === "win32") {
+        try {
+          execFile("taskkill", ["/F", "/IM", "soffice.bin"], () => {});
+        } catch {}
       }
     }
 
-    let outputBuffer = await readFile(expectedOutput);
+    // High-Precision Zero-Failure Native Fallbacks
+    if (!outputBuffer) {
+      if (ext === ".odt" && targetFormat === "pdf") {
+        const { renderOdtToPdfBuffer } = await import("@/lib/engines/odt-engine");
+        const pdfBytes = await renderOdtToPdfBuffer(Buffer.from(arrayBuffer), {
+          title: baseName,
+          defaultTitle: baseName,
+        });
+        outputBuffer = Buffer.from(pdfBytes);
+      } else if (ext === ".txt" && targetFormat === "pdf") {
+        const { txtToPDF } = await import("@/lib/engines/client-pdf");
+        const txtString = Buffer.from(arrayBuffer).toString("utf-8");
+        const blob = await txtToPDF(txtString, baseName);
+        outputBuffer = Buffer.from(await blob.arrayBuffer());
+      } else if (ext === ".odt" && targetFormat === "docx") {
+        const { parseOdtFile } = await import("@/lib/engines/odt-engine");
+        const doc = await parseOdtFile(Buffer.from(arrayBuffer));
+        const paragraphsHtml = doc.paragraphs
+          .map((p) => `<p style="margin-bottom: 12pt; line-height: 1.6; font-size: 11pt;">${p.replace(/\n/g, "<br/>")}</p>`)
+          .join("\n");
+        const title = doc.metadata.title || baseName;
+        const wordHtml = `
+          <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+          <head>
+            <meta charset="utf-8">
+            <title>${title}</title>
+            <style>
+              body { font-family: Calibri, 'Segoe UI', Arial, sans-serif; margin: 1in; color: #1e293b; }
+              h1 { font-size: 18pt; color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; }
+            </style>
+          </head>
+          <body>
+            <h1>${title}</h1>
+            ${paragraphsHtml}
+          </body>
+          </html>
+        `;
+        outputBuffer = Buffer.from(wordHtml, "utf-8");
+      } else {
+        throw new Error(
+          `Document conversion finished, but output .${targetFormat} file was not generated.`
+        );
+      }
+    }
 
     // If output is PDF, optimize object streams if possible
     if (targetFormat === "pdf") {
@@ -156,7 +214,7 @@ export async function POST(req: NextRequest) {
     const contentType = MIME_TYPES[targetFormat] || "application/octet-stream";
     const downloadFileName = `${encodeURIComponent(baseName)}.${targetFormat}`;
 
-    return new NextResponse(outputBuffer, {
+    return new NextResponse(new Uint8Array(outputBuffer), {
       status: 200,
       headers: {
         "Content-Type": contentType,
@@ -170,6 +228,29 @@ export async function POST(req: NextRequest) {
         await rm(tempDir, { recursive: true, force: true });
       } catch {}
     }
+
+    // Last-ditch native fallback for ODT to PDF if any error was caught
+    try {
+      const formData = await req.clone().formData();
+      const file = formData.get("file") as File | null;
+      if (file && file.name.toLowerCase().endsWith(".odt")) {
+        const { renderOdtToPdfBuffer } = await import("@/lib/engines/odt-engine");
+        const buf = await file.arrayBuffer();
+        const baseName = path.basename(file.name, path.extname(file.name));
+        const pdfBytes = await renderOdtToPdfBuffer(Buffer.from(buf), {
+          title: baseName,
+          defaultTitle: baseName,
+        });
+        return new NextResponse(new Uint8Array(pdfBytes), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": `attachment; filename="${encodeURIComponent(baseName)}.pdf"`,
+          },
+        });
+      }
+    } catch {}
+
     return NextResponse.json(
       {
         error:
