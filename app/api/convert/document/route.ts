@@ -130,13 +130,6 @@ export async function POST(req: NextRequest) {
       }
     } catch (loError) {
       console.warn("LibreOffice subprocess conversion had an issue, checking native fallback:", loError);
-    } finally {
-      // On Windows, kill any orphaned soffice.bin that stays running in background
-      if (os.platform() === "win32") {
-        try {
-          execFile("taskkill", ["/F", "/IM", "soffice.bin"], () => {});
-        } catch {}
-      }
     }
 
     // High-Precision Zero-Failure Native Fallbacks

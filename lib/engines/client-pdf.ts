@@ -943,10 +943,19 @@ export async function convertDocument(
     formData.append("file", file);
     formData.append("targetFormat", targetFormat);
 
-    const res = await fetch("/api/convert/document", {
+    let res = await fetch("/api/convert/document", {
       method: "POST",
       body: formData,
     });
+
+    if (!res.ok && targetFormat === "pdf") {
+      const officeForm = new FormData();
+      officeForm.append("file", file);
+      res = await fetch("/api/convert/office-to-pdf", {
+        method: "POST",
+        body: officeForm,
+      });
+    }
 
     if (res.ok) {
       return await res.blob();

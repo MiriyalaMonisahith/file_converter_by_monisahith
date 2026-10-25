@@ -45,8 +45,12 @@ export interface OdtToPdfOptions {
 }
 
 export interface StructuredOdtElement {
-  type: "h1" | "h2" | "h3" | "p" | "bullet" | "table-row";
-  text: string;
+  type: "h1" | "h2" | "h3" | "p" | "image" | "table" | "hr";
+  text?: string;
+  imageBytes?: Uint8Array;
+  imagePath?: string;
+  tableRows?: string[][];
+  hasBorder?: boolean;
 }
 
 async function toArrayBuffer(fileOrBuffer: File | Blob | ArrayBuffer | Uint8Array): Promise<ArrayBuffer> {
@@ -427,8 +431,27 @@ function getDefaultContentXml(): string {
 // High-Precision Native ODT to PDF Engine (Vector Fidelity)
 // -------------------------------------------------------------
 
+function isPng(bytes: Uint8Array): boolean {
+  return (
+    bytes.length >= 4 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47
+  );
+}
+
+function isJpg(bytes: Uint8Array): boolean {
+  return (
+    bytes.length >= 3 &&
+    bytes[0] === 0xff &&
+    bytes[1] === 0xd8 &&
+    bytes[2] === 0xff
+  );
+}
+
 /**
- * Extracts structured document blocks (headings, paragraphs, bullet lists, tables)
+ * Extracts structured document blocks (headings, paragraphs, bullet lists, tables, photos/images, and divider borders)
  * and metadata from an OpenDocument Text file.
  */
 export async function parseOdtStructuredContent(
@@ -451,15 +474,98 @@ export async function parseOdtStructuredContent(
   let author = extractXmlTagContent(metaXml, "dc:creator");
 
   const elements: StructuredOdtElement[] = [];
+  const processedImages = new Set<string>();
+
+  // Collect all embedded image filenames from the zip archive
+  const allZipImages = Object.keys(zip.files).filter(
+    (p) => p.startsWith("Pictures/") && !p.endsWith("/")
+  );
 
   if (contentXml) {
-    // Match block-level elements in sequential order:
-    // headings, paragraphs, list items, table rows
-    const blockRegex = /<(text:(?:p|h)|table:table-row)[^>]*>([\s\S]*?)<\/\1>/gi;
+    // Regex matching major block-level elements: tables, draw frames/images, headings, and paragraphs
+    const blockRegex =
+      /<(table:table|draw:frame|text:h|text:p)[^>]*>([\s\S]*?)<\/\1>|<draw:image[^>]*\/?>/gi;
     let match;
     while ((match = blockRegex.exec(contentXml)) !== null) {
-      const tag = match[1].toLowerCase();
-      const rawInner = match[2];
+      const fullMatch = match[0];
+      const tag = (match[1] || "").toLowerCase();
+      const rawInner = match[2] || "";
+
+      // 1. Table with rows, cells, and borders
+      if (tag === "table:table") {
+        const rows: string[][] = [];
+        const rowRegex = /<table:table-row[^>]*>([\s\S]*?)<\/table:table-row>/gi;
+        let rMatch;
+        while ((rMatch = rowRegex.exec(rawInner)) !== null) {
+          const rowInner = rMatch[1];
+          const cells: string[] = [];
+          const cellRegex = /<table:table-cell[^>]*>([\s\S]*?)<\/table:table-cell>/gi;
+          let cMatch;
+          while ((cMatch = cellRegex.exec(rowInner)) !== null) {
+            const cellInner = cMatch[1];
+            const cleanCell = cellInner
+              .replace(/<text:tab\s*\/>/gi, "\t")
+              .replace(/<text:line-break\s*\/>/gi, "\n")
+              .replace(/<text:s\s+text:c="(\d+)"\s*\/>/gi, (_, count) => " ".repeat(parseInt(count, 10)))
+              .replace(/<text:s\s*\/>/gi, " ")
+              .replace(/<[^>]+>/g, " ")
+              .trim();
+            cells.push(decodeXmlEntities(cleanCell));
+          }
+          if (cells.length > 0) {
+            rows.push(cells);
+          }
+        }
+
+        if (rows.length > 0) {
+          elements.push({
+            type: "table",
+            tableRows: rows,
+            hasBorder: true,
+          });
+        }
+        continue;
+      }
+
+      // 2. Standalone or framed Draw image / photo
+      if (tag === "draw:frame" || fullMatch.toLowerCase().startsWith("<draw:image")) {
+        const hrefMatch = /href=["']([^"']+)["']/i.exec(fullMatch);
+        if (hrefMatch) {
+          const rawPath = hrefMatch[1].replace(/^\.\//, "");
+          const imgFile = zip.file(rawPath) || zip.file(decodeURIComponent(rawPath));
+          if (imgFile) {
+            const imageBytes = await imgFile.async("uint8array");
+            elements.push({
+              type: "image",
+              imageBytes,
+              imagePath: rawPath,
+              hasBorder: true,
+            });
+            processedImages.add(rawPath);
+            continue;
+          }
+        }
+      }
+
+      // 3. Headings & Paragraphs
+      // Check if this paragraph contains an inline draw image
+      if (rawInner.includes("<draw:image") || rawInner.includes("<draw:frame")) {
+        const hrefMatch = /href=["']([^"']+)["']/i.exec(rawInner);
+        if (hrefMatch) {
+          const rawPath = hrefMatch[1].replace(/^\.\//, "");
+          const imgFile = zip.file(rawPath) || zip.file(decodeURIComponent(rawPath));
+          if (imgFile) {
+            const imageBytes = await imgFile.async("uint8array");
+            elements.push({
+              type: "image",
+              imageBytes,
+              imagePath: rawPath,
+              hasBorder: true,
+            });
+            processedImages.add(rawPath);
+          }
+        }
+      }
 
       const cleanText = rawInner
         .replace(/<text:tab\s*\/>/gi, "\t")
@@ -474,6 +580,15 @@ export async function parseOdtStructuredContent(
         .replace(/&amp;/g, "&")
         .trim();
 
+      // Check for horizontal border divider lines
+      const isHr =
+        /Horizontal_20_Line|horizontal-rule|border-bottom/i.test(fullMatch) ||
+        /^[_\-—]{3,}$/.test(cleanText);
+      if (isHr) {
+        elements.push({ type: "hr", hasBorder: true });
+        continue;
+      }
+
       if (!cleanText) {
         // Preserve vertical paragraph break spacing
         elements.push({ type: "p", text: "" });
@@ -481,14 +596,14 @@ export async function parseOdtStructuredContent(
       }
 
       if (tag.startsWith("text:h")) {
-        const isH1 = /outline-level=["']1["']/i.test(match[0]);
-        const isH2 = /outline-level=["']2["']/i.test(match[0]);
+        const isH1 = /outline-level=["']1["']/i.test(fullMatch);
+        const isH2 = /outline-level=["']2["']/i.test(fullMatch);
         elements.push({
           type: isH1 ? "h1" : isH2 ? "h2" : "h3",
           text: cleanText,
         });
       } else {
-        // Preserve paragraph and tabular text as originally written, without stripping or replacing markers
+        // Preserve paragraph text as originally written
         elements.push({
           type: "p",
           text: cleanText,
@@ -497,22 +612,42 @@ export async function parseOdtStructuredContent(
     }
   }
 
+  // Ensure ALL photos in Pictures/ are included so none are omitted
+  for (const imgPath of allZipImages) {
+    if (!processedImages.has(imgPath)) {
+      const imgFile = zip.file(imgPath);
+      if (imgFile) {
+        const imageBytes = await imgFile.async("uint8array");
+        elements.push({
+          type: "image",
+          imageBytes,
+          imagePath: imgPath,
+          hasBorder: true,
+        });
+        processedImages.add(imgPath);
+      }
+    }
+  }
+
   // If title was not in meta.xml, look for first H1
   if (!title) {
     const firstH1 = elements.find((e) => e.type === "h1");
-    if (firstH1) {
+    if (firstH1 && firstH1.text) {
       title = firstH1.text;
     }
   }
 
-  const rawText = elements.map((e) => e.text).join("\n\n");
+  const rawText = elements
+    .filter((e) => e.text)
+    .map((e) => e.text)
+    .join("\n\n");
 
   return { title, author, elements, rawText };
 }
 
 /**
  * Converts an ODT buffer or file directly into a high-standard, vector-clean PDF binary buffer (Uint8Array).
- * Preserves the exact text and details of the given file without adding synthetic headers, footers, or branding.
+ * Preserves the exact text, tables with borders, embedded photos, and formatting without synthetic headers or branding.
  */
 export async function renderOdtToPdfBuffer(
   fileOrBuffer: File | Blob | ArrayBuffer | Uint8Array,
@@ -538,10 +673,10 @@ export async function renderOdtToPdfBuffer(
   // Standard A4 dimensions (in points: 72 points per inch)
   const PAGE_WIDTH = 595.28;
   const PAGE_HEIGHT = 841.89;
-  const MARGIN_LEFT = 54;
-  const MARGIN_RIGHT = 54;
-  const MARGIN_TOP = 54;
-  const MARGIN_BOTTOM = 54;
+  const MARGIN_LEFT = 48;
+  const MARGIN_RIGHT = 48;
+  const MARGIN_TOP = 48;
+  const MARGIN_BOTTOM = 48;
   const CONTENT_WIDTH = PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT;
 
   // Word wrapping utility preserving original words
@@ -573,138 +708,200 @@ export async function renderOdtToPdfBuffer(
     return lines;
   }
 
-  interface RenderableItem {
-    type: "text" | "spacing";
-    text?: string;
-    font?: any;
-    size?: number;
-    color?: any;
-    lineHeight?: number;
-    height?: number;
+  let page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+  let yPos = PAGE_HEIGHT - MARGIN_TOP;
+
+  function ensurePageSpace(neededHeight: number) {
+    if (yPos - neededHeight < MARGIN_BOTTOM) {
+      page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+      yPos = PAGE_HEIGHT - MARGIN_TOP;
+    }
   }
 
-  const itemsToRender: RenderableItem[] = [];
-
   for (const el of elements) {
-    if (!el.text) {
-      itemsToRender.push({ type: "spacing", height: 10 });
+    // 1. Photos & Images
+    if (el.type === "image" && el.imageBytes && el.imageBytes.length > 0) {
+      let embeddedImg: any = null;
+      try {
+        if (isPng(el.imageBytes)) {
+          embeddedImg = await pdfDoc.embedPng(el.imageBytes);
+        } else if (isJpg(el.imageBytes)) {
+          embeddedImg = await pdfDoc.embedJpg(el.imageBytes);
+        } else {
+          try {
+            embeddedImg = await pdfDoc.embedPng(el.imageBytes);
+          } catch {
+            embeddedImg = await pdfDoc.embedJpg(el.imageBytes);
+          }
+        }
+      } catch (imgErr) {
+        console.warn("Could not embed image directly:", imgErr);
+      }
+
+      if (embeddedImg) {
+        const maxW = CONTENT_WIDTH;
+        const maxH = 320;
+        let w = embeddedImg.width;
+        let h = embeddedImg.height;
+        const scale = Math.min(maxW / w, maxH / h, 1);
+        w = Math.max(1, Math.round(w * scale));
+        h = Math.max(1, Math.round(h * scale));
+
+        ensurePageSpace(h + 16);
+        const imgX = MARGIN_LEFT + (CONTENT_WIDTH - w) / 2;
+        const imgY = yPos - h;
+
+        // Draw photo
+        page.drawImage(embeddedImg, {
+          x: imgX,
+          y: imgY,
+          width: w,
+          height: h,
+        });
+
+        // Draw clean border around photo
+        page.drawRectangle({
+          x: imgX,
+          y: imgY,
+          width: w,
+          height: h,
+          borderColor: rgb(0.65, 0.7, 0.78),
+          borderWidth: 1,
+        });
+
+        yPos -= h + 14;
+      }
       continue;
     }
 
-    if (el.type === "h1") {
-      itemsToRender.push({ type: "spacing", height: 14 });
-      const wrapped = wrapText(el.text, fontBold, 16, CONTENT_WIDTH);
-      for (const line of wrapped) {
-        itemsToRender.push({
-          type: "text",
-          text: line,
-          font: fontBold,
-          size: 16,
-          color: rgb(0.08, 0.12, 0.2),
-          lineHeight: 22,
-        });
-      }
-      itemsToRender.push({ type: "spacing", height: 6 });
-    } else if (el.type === "h2") {
-      itemsToRender.push({ type: "spacing", height: 11 });
-      const wrapped = wrapText(el.text, fontBold, 13, CONTENT_WIDTH);
-      for (const line of wrapped) {
-        itemsToRender.push({
-          type: "text",
-          text: line,
-          font: fontBold,
-          size: 13,
-          color: rgb(0.12, 0.18, 0.28),
-          lineHeight: 18,
-        });
-      }
-      itemsToRender.push({ type: "spacing", height: 4 });
-    } else if (el.type === "h3") {
-      itemsToRender.push({ type: "spacing", height: 8 });
-      const wrapped = wrapText(el.text, fontBold, 11.5, CONTENT_WIDTH);
-      for (const line of wrapped) {
-        itemsToRender.push({
-          type: "text",
-          text: line,
-          font: fontBold,
-          size: 11.5,
-          color: rgb(0.18, 0.24, 0.35),
-          lineHeight: 16,
-        });
-      }
-      itemsToRender.push({ type: "spacing", height: 3 });
-    } else {
-      // Normal paragraph or tabular text - render exact text as in given file
-      const wrapped = wrapText(el.text, fontRegular, 10.5, CONTENT_WIDTH);
-      for (const line of wrapped) {
-        itemsToRender.push({
-          type: "text",
-          text: line,
-          font: fontRegular,
-          size: 10.5,
-          color: rgb(0.12, 0.16, 0.22),
-          lineHeight: 15.5,
-        });
-      }
-      itemsToRender.push({ type: "spacing", height: 5 });
-    }
-  }
+    // 2. Tables with Borders
+    if (el.type === "table" && el.tableRows && el.tableRows.length > 0) {
+      const numCols = Math.max(...el.tableRows.map((r) => r.length), 1);
+      const colWidth = CONTENT_WIDTH / numCols;
 
-  // Fallback for empty documents
-  if (itemsToRender.length === 0) {
-    itemsToRender.push({
-      type: "text",
-      text: "",
-      font: fontRegular,
-      size: 11,
-      color: rgb(0.2, 0.2, 0.2),
-      lineHeight: 16,
-    });
-  }
+      for (let rowIdx = 0; rowIdx < el.tableRows.length; rowIdx++) {
+        const row = el.tableRows[rowIdx];
+        const cellLinesList: string[][] = [];
+        let maxLinesInRow = 1;
 
-  // Paginate items based on usable vertical height (clean page with full margins)
-  const pages: RenderableItem[][] = [];
-  let currentPageItems: RenderableItem[] = [];
-  const USABLE_HEIGHT = PAGE_HEIGHT - MARGIN_TOP - MARGIN_BOTTOM;
-  let currentHeight = 0;
-
-  for (const item of itemsToRender) {
-    const itemHeight = item.type === "spacing" ? (item.height || 0) : (item.lineHeight || 15);
-    if (currentHeight + itemHeight > USABLE_HEIGHT && currentPageItems.length > 0) {
-      pages.push(currentPageItems);
-      currentPageItems = [item];
-      currentHeight = itemHeight;
-    } else {
-      currentPageItems.push(item);
-      currentHeight += itemHeight;
-    }
-  }
-  if (currentPageItems.length > 0) {
-    pages.push(currentPageItems);
-  }
-
-  const totalPages = pages.length;
-
-  for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
-    const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-    const items = pages[pageIdx];
-
-    // Body content rendering directly from top margin - no injected headers, footers, or branding
-    let yPos = PAGE_HEIGHT - MARGIN_TOP;
-    for (const item of items) {
-      if (item.type === "spacing") {
-        yPos -= item.height || 0;
-      } else if (item.type === "text") {
-        if (item.text) {
-          page.drawText(item.text, {
-            x: MARGIN_LEFT,
-            y: yPos,
-            size: item.size || 10.5,
-            font: item.font || fontRegular,
-            color: item.color || rgb(0.12, 0.16, 0.22),
-          });
+        for (let colIdx = 0; colIdx < numCols; colIdx++) {
+          const cellText = row[colIdx] || "";
+          const lines = wrapText(
+            cellText,
+            rowIdx === 0 ? fontBold : fontRegular,
+            9.5,
+            Math.max(colWidth - 10, 20)
+          );
+          cellLinesList.push(lines.length > 0 ? lines : [""]);
+          if (lines.length > maxLinesInRow) {
+            maxLinesInRow = lines.length;
+          }
         }
-        yPos -= item.lineHeight || 15.5;
+
+        const rowHeight = Math.max(22, maxLinesInRow * 13 + 10);
+        ensurePageSpace(rowHeight);
+
+        // Draw each cell with visible border lines and text
+        for (let colIdx = 0; colIdx < numCols; colIdx++) {
+          const cellX = MARGIN_LEFT + colIdx * colWidth;
+          const cellY = yPos - rowHeight;
+
+          // Visible cell border rectangle
+          page.drawRectangle({
+            x: cellX,
+            y: cellY,
+            width: colWidth,
+            height: rowHeight,
+            borderColor: rgb(0.5, 0.55, 0.65), // Crisp visible table border
+            borderWidth: 1,
+            color: rowIdx === 0 ? rgb(0.93, 0.95, 0.98) : undefined,
+          });
+
+          // Text inside cell
+          const lines = cellLinesList[colIdx];
+          let textY = cellY + rowHeight - 13;
+          for (const line of lines) {
+            if (line) {
+              page.drawText(line, {
+                x: cellX + 5,
+                y: textY,
+                size: 9.5,
+                font: rowIdx === 0 ? fontBold : fontRegular,
+                color: rgb(0.1, 0.15, 0.22),
+              });
+            }
+            textY -= 13;
+          }
+        }
+
+        yPos -= rowHeight;
+      }
+
+      yPos -= 10;
+      continue;
+    }
+
+    // 3. Horizontal Border Divider Rules
+    if (el.type === "hr") {
+      ensurePageSpace(14);
+      yPos -= 5;
+      page.drawLine({
+        start: { x: MARGIN_LEFT, y: yPos },
+        end: { x: PAGE_WIDTH - MARGIN_RIGHT, y: yPos },
+        thickness: 1,
+        color: rgb(0.65, 0.7, 0.78),
+      });
+      yPos -= 9;
+      continue;
+    }
+
+    // 4. Headings
+    if (el.type === "h1" || el.type === "h2" || el.type === "h3") {
+      const isH1 = el.type === "h1";
+      const isH2 = el.type === "h2";
+      const fontSize = isH1 ? 16 : isH2 ? 13 : 11.5;
+      const lineHeight = isH1 ? 22 : isH2 ? 18 : 16;
+      const font = fontBold;
+      const color = isH1
+        ? rgb(0.08, 0.12, 0.2)
+        : isH2
+        ? rgb(0.12, 0.18, 0.28)
+        : rgb(0.18, 0.24, 0.35);
+
+      const wrapped = wrapText(el.text || "", font, fontSize, CONTENT_WIDTH);
+      for (const line of wrapped) {
+        ensurePageSpace(lineHeight + 4);
+        page.drawText(line, {
+          x: MARGIN_LEFT,
+          y: yPos - lineHeight + 4,
+          size: fontSize,
+          font,
+          color,
+        });
+        yPos -= lineHeight;
+      }
+      yPos -= isH1 ? 6 : 4;
+      continue;
+    }
+
+    // 5. Normal Paragraphs
+    if (el.type === "p") {
+      if (!el.text) {
+        yPos -= 8;
+      } else {
+        const wrapped = wrapText(el.text, fontRegular, 10.5, CONTENT_WIDTH);
+        for (const line of wrapped) {
+          ensurePageSpace(16);
+          page.drawText(line, {
+            x: MARGIN_LEFT,
+            y: yPos - 12,
+            size: 10.5,
+            font: fontRegular,
+            color: rgb(0.12, 0.16, 0.22),
+          });
+          yPos -= 15.5;
+        }
+        yPos -= 5;
       }
     }
   }
