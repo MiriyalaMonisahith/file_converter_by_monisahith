@@ -195,7 +195,7 @@ export function FileUploader({
       } catch (convErr) {
         if (toolId === "odt-to-pdf" || rawFile.name.toLowerCase().endsWith(".odt")) {
           const { convertOdtToPdf } = await import("@/lib/engines/odt-engine");
-          blob = await convertOdtToPdf(rawFile, { title: baseName, defaultTitle: baseName });
+          blob = await convertOdtToPdf(rawFile);
         } else {
           throw convErr;
         }

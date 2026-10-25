@@ -462,7 +462,7 @@ export async function parseOdtStructuredContent(
       const rawInner = match[2];
 
       const cleanText = rawInner
-        .replace(/<text:tab\s*\/>/gi, "    ")
+        .replace(/<text:tab\s*\/>/gi, "\t")
         .replace(/<text:line-break\s*\/>/gi, "\n")
         .replace(/<text:s\s+text:c="(\d+)"\s*\/>/gi, (_, count) => " ".repeat(parseInt(count, 10)))
         .replace(/<text:s\s*\/>/gi, " ")
@@ -474,7 +474,11 @@ export async function parseOdtStructuredContent(
         .replace(/&amp;/g, "&")
         .trim();
 
-      if (!cleanText) continue;
+      if (!cleanText) {
+        // Preserve vertical paragraph break spacing
+        elements.push({ type: "p", text: "" });
+        continue;
+      }
 
       if (tag.startsWith("text:h")) {
         const isH1 = /outline-level=["']1["']/i.test(match[0]);
@@ -483,18 +487,11 @@ export async function parseOdtStructuredContent(
           type: isH1 ? "h1" : isH2 ? "h2" : "h3",
           text: cleanText,
         });
-      } else if (tag.startsWith("table:table-row")) {
-        // Tabular row - collapse multiple spaces
-        elements.push({
-          type: "table-row",
-          text: cleanText.replace(/\s{2,}/g, "  |  "),
-        });
       } else {
-        // Check if paragraph is inside a list item or starts with bullet markers
-        const isBullet = /^[•\-*]\s+/i.test(cleanText);
+        // Preserve paragraph and tabular text as originally written, without stripping or replacing markers
         elements.push({
-          type: isBullet ? "bullet" : "p",
-          text: isBullet ? cleanText.replace(/^[•\-*]\s+/, "") : cleanText,
+          type: "p",
+          text: cleanText,
         });
       }
     }
@@ -515,7 +512,7 @@ export async function parseOdtStructuredContent(
 
 /**
  * Converts an ODT buffer or file directly into a high-standard, vector-clean PDF binary buffer (Uint8Array).
- * Runs natively in Node.js and the Browser with zero subprocess dependencies.
+ * Preserves the exact text and details of the given file without adding synthetic headers, footers, or branding.
  */
 export async function renderOdtToPdfBuffer(
   fileOrBuffer: File | Blob | ArrayBuffer | Uint8Array,
@@ -524,12 +521,16 @@ export async function renderOdtToPdfBuffer(
   const { title: parsedTitle, author: parsedAuthor, elements } =
     await parseOdtStructuredContent(fileOrBuffer);
 
-  const docTitle =
-    options?.title ||
-    (parsedTitle && parsedTitle !== "Document Title" ? parsedTitle : options?.defaultTitle || "Document");
-  const author = options?.author || parsedAuthor;
-
   const pdfDoc = await PDFDocument.create();
+
+  // Set metadata ONLY if present in the original document
+  if (options?.title || parsedTitle) {
+    pdfDoc.setTitle(options?.title || parsedTitle);
+  }
+  if (options?.author || parsedAuthor) {
+    pdfDoc.setAuthor(options?.author || parsedAuthor);
+  }
+
   const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const fontItalic = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
@@ -543,7 +544,7 @@ export async function renderOdtToPdfBuffer(
   const MARGIN_BOTTOM = 54;
   const CONTENT_WIDTH = PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT;
 
-  // Word wrapping utility
+  // Word wrapping utility preserving original words
   function wrapText(text: string, font: any, size: number, maxWidth: number): string[] {
     const lines: string[] = [];
     const paragraphs = text.split("\n");
@@ -573,21 +574,25 @@ export async function renderOdtToPdfBuffer(
   }
 
   interface RenderableItem {
-    type: "text" | "spacing" | "bullet";
+    type: "text" | "spacing";
     text?: string;
     font?: any;
     size?: number;
     color?: any;
     lineHeight?: number;
-    indent?: number;
     height?: number;
   }
 
   const itemsToRender: RenderableItem[] = [];
 
   for (const el of elements) {
+    if (!el.text) {
+      itemsToRender.push({ type: "spacing", height: 10 });
+      continue;
+    }
+
     if (el.type === "h1") {
-      itemsToRender.push({ type: "spacing", height: 16 });
+      itemsToRender.push({ type: "spacing", height: 14 });
       const wrapped = wrapText(el.text, fontBold, 16, CONTENT_WIDTH);
       for (const line of wrapped) {
         itemsToRender.push({
@@ -601,7 +606,7 @@ export async function renderOdtToPdfBuffer(
       }
       itemsToRender.push({ type: "spacing", height: 6 });
     } else if (el.type === "h2") {
-      itemsToRender.push({ type: "spacing", height: 12 });
+      itemsToRender.push({ type: "spacing", height: 11 });
       const wrapped = wrapText(el.text, fontBold, 13, CONTENT_WIDTH);
       for (const line of wrapped) {
         itemsToRender.push({
@@ -615,7 +620,7 @@ export async function renderOdtToPdfBuffer(
       }
       itemsToRender.push({ type: "spacing", height: 4 });
     } else if (el.type === "h3") {
-      itemsToRender.push({ type: "spacing", height: 9 });
+      itemsToRender.push({ type: "spacing", height: 8 });
       const wrapped = wrapText(el.text, fontBold, 11.5, CONTENT_WIDTH);
       for (const line of wrapped) {
         itemsToRender.push({
@@ -628,37 +633,8 @@ export async function renderOdtToPdfBuffer(
         });
       }
       itemsToRender.push({ type: "spacing", height: 3 });
-    } else if (el.type === "bullet") {
-      const bulletIndent = 14;
-      const wrapped = wrapText(el.text, fontRegular, 10, CONTENT_WIDTH - bulletIndent);
-      for (let i = 0; i < wrapped.length; i++) {
-        itemsToRender.push({
-          type: i === 0 ? "bullet" : "text",
-          text: wrapped[i],
-          font: fontRegular,
-          size: 10,
-          color: rgb(0.15, 0.2, 0.26),
-          lineHeight: 14.5,
-          indent: bulletIndent,
-        });
-      }
-      itemsToRender.push({ type: "spacing", height: 3 });
-    } else if (el.type === "table-row") {
-      const wrapped = wrapText(el.text, fontRegular, 9.5, CONTENT_WIDTH - 8);
-      for (const line of wrapped) {
-        itemsToRender.push({
-          type: "text",
-          text: line,
-          font: fontRegular,
-          size: 9.5,
-          color: rgb(0.2, 0.25, 0.32),
-          lineHeight: 14,
-          indent: 4,
-        });
-      }
-      itemsToRender.push({ type: "spacing", height: 2 });
     } else {
-      // Normal paragraph
+      // Normal paragraph or tabular text - render exact text as in given file
       const wrapped = wrapText(el.text, fontRegular, 10.5, CONTENT_WIDTH);
       for (const line of wrapped) {
         itemsToRender.push({
@@ -678,18 +654,18 @@ export async function renderOdtToPdfBuffer(
   if (itemsToRender.length === 0) {
     itemsToRender.push({
       type: "text",
-      text: "Document contains no readable text content.",
-      font: fontItalic,
+      text: "",
+      font: fontRegular,
       size: 11,
-      color: rgb(0.4, 0.45, 0.5),
+      color: rgb(0.2, 0.2, 0.2),
       lineHeight: 16,
     });
   }
 
-  // Paginate items based on usable vertical height
+  // Paginate items based on usable vertical height (clean page with full margins)
   const pages: RenderableItem[][] = [];
   let currentPageItems: RenderableItem[] = [];
-  const USABLE_HEIGHT = PAGE_HEIGHT - MARGIN_TOP - MARGIN_BOTTOM - 48; // room for top running header & bottom footer
+  const USABLE_HEIGHT = PAGE_HEIGHT - MARGIN_TOP - MARGIN_BOTTOM;
   let currentHeight = 0;
 
   for (const item of itemsToRender) {
@@ -713,64 +689,15 @@ export async function renderOdtToPdfBuffer(
     const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
     const items = pages[pageIdx];
 
-    // Running Header: Document Title on left
-    const headerTitle = docTitle.length > 45 ? `${docTitle.slice(0, 42)}...` : docTitle;
-    page.drawText(headerTitle, {
-      x: MARGIN_LEFT,
-      y: PAGE_HEIGHT - 32,
-      size: 8.5,
-      font: fontBold,
-      color: rgb(0.38, 0.42, 0.5),
-    });
-
-    if (author) {
-      const authorText = `Author: ${author.length > 25 ? `${author.slice(0, 22)}...` : author}`;
-      const authorWidth = fontRegular.widthOfTextAtSize(authorText, 8.5);
-      page.drawText(authorText, {
-        x: PAGE_WIDTH - MARGIN_RIGHT - authorWidth,
-        y: PAGE_HEIGHT - 32,
-        size: 8.5,
-        font: fontRegular,
-        color: rgb(0.45, 0.5, 0.56),
-      });
-    }
-
-    // Top Header Divider Rule
-    page.drawLine({
-      start: { x: MARGIN_LEFT, y: PAGE_HEIGHT - 39 },
-      end: { x: PAGE_WIDTH - MARGIN_RIGHT, y: PAGE_HEIGHT - 39 },
-      thickness: 0.75,
-      color: rgb(0.85, 0.88, 0.92),
-    });
-
-    // Body content rendering
-    let yPos = PAGE_HEIGHT - MARGIN_TOP - 16;
+    // Body content rendering directly from top margin - no injected headers, footers, or branding
+    let yPos = PAGE_HEIGHT - MARGIN_TOP;
     for (const item of items) {
       if (item.type === "spacing") {
         yPos -= item.height || 0;
-      } else if (item.type === "bullet") {
-        if (item.text) {
-          // Draw bullet circle/char
-          page.drawText("•", {
-            x: MARGIN_LEFT + 2,
-            y: yPos,
-            size: item.size || 10,
-            font: fontBold,
-            color: rgb(0.3, 0.35, 0.45),
-          });
-          page.drawText(item.text, {
-            x: MARGIN_LEFT + (item.indent || 14),
-            y: yPos,
-            size: item.size || 10,
-            font: item.font || fontRegular,
-            color: item.color || rgb(0.15, 0.2, 0.26),
-          });
-        }
-        yPos -= item.lineHeight || 14.5;
       } else if (item.type === "text") {
         if (item.text) {
           page.drawText(item.text, {
-            x: MARGIN_LEFT + (item.indent || 0),
+            x: MARGIN_LEFT,
             y: yPos,
             size: item.size || 10.5,
             font: item.font || fontRegular,
@@ -780,34 +707,6 @@ export async function renderOdtToPdfBuffer(
         yPos -= item.lineHeight || 15.5;
       }
     }
-
-    // Bottom Footer Divider Rule
-    page.drawLine({
-      start: { x: MARGIN_LEFT, y: 38 },
-      end: { x: PAGE_WIDTH - MARGIN_RIGHT, y: 38 },
-      thickness: 0.75,
-      color: rgb(0.85, 0.88, 0.92),
-    });
-
-    // Running Footer Text
-    const footerBrand = "Generated with OpenPDF Studio";
-    page.drawText(footerBrand, {
-      x: MARGIN_LEFT,
-      y: 24,
-      size: 8,
-      font: fontRegular,
-      color: rgb(0.52, 0.57, 0.64),
-    });
-
-    const pageNumText = `Page ${pageIdx + 1} of ${totalPages}`;
-    const pageNumWidth = fontRegular.widthOfTextAtSize(pageNumText, 8);
-    page.drawText(pageNumText, {
-      x: PAGE_WIDTH - MARGIN_RIGHT - pageNumWidth,
-      y: 24,
-      size: 8,
-      font: fontRegular,
-      color: rgb(0.48, 0.53, 0.6),
-    });
   }
 
   const pdfBytes = await pdfDoc.save({ useObjectStreams: true });

@@ -958,7 +958,7 @@ export async function convertDocument(
   // Resilient Client-Side Native Engines
   if (isOdt && targetFormat === "pdf") {
     const { convertOdtToPdf } = await import("./odt-engine");
-    return await convertOdtToPdf(file, { title: file.name.replace(/\.[^/.]+$/, "") });
+    return await convertOdtToPdf(file);
   }
 
   if (targetFormat === "pdf" && file.name.toLowerCase().endsWith(".txt")) {

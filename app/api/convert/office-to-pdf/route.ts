@@ -64,28 +64,13 @@ export async function POST(req: NextRequest) {
     await writeFile(inputPath, buffer);
 
     const sofficePath = findLibreOfficePath();
-    const profileUrl = `file:///${tempDir.replace(/\\/g, "/")}/profile`;
 
-    // Execute optimized LibreOffice headless conversion
-    // Skipping GUI, first-start wizards, restore checking, and lock checks for maximum speed
+    // Execute direct LibreOffice headless conversion preserving exact document text and details
+    const convertFilter = ext === ".odt" ? "pdf:writer_pdf_Export" : "pdf";
     await execFileAsync(
       sofficePath,
-      [
-        "--headless",
-        "--invisible",
-        "--nodefault",
-        "--nofirststartwizard",
-        "--nolockcheck",
-        "--nologo",
-        "--norestore",
-        `-env:UserInstallation=${profileUrl}`,
-        "--convert-to",
-        "pdf",
-        "--outdir",
-        tempDir,
-        inputPath,
-      ],
-      { timeout: 60000 }
+      ["--headless", "--convert-to", convertFilter, "--outdir", tempDir, inputPath],
+      { timeout: 30000 }
     );
 
     // Converted PDF will have the same basename as input, but with .pdf
@@ -95,19 +80,7 @@ export async function POST(req: NextRequest) {
       throw new Error("LibreOffice conversion finished but output PDF was not found.");
     }
 
-    let pdfBuffer = await readFile(outputPath);
-
-    // Secondary size reduction: Compress PDF structure and streams with pdf-lib object streams
-    try {
-      const { PDFDocument } = await import("pdf-lib");
-      const pdfDoc = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
-      const optimizedBytes = await pdfDoc.save({ useObjectStreams: true });
-      if (optimizedBytes.length < pdfBuffer.length) {
-        pdfBuffer = Buffer.from(optimizedBytes);
-      }
-    } catch {
-      // Fallback to original LibreOffice output if structure re-save fails
-    }
+    const pdfBuffer = await readFile(outputPath);
 
     // Ephemeral cleanup: remove temp directory and files immediately
     try {

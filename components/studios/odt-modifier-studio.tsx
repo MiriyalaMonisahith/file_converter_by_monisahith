@@ -53,6 +53,9 @@ export function OdtModifierStudio() {
   const [keywordsInput, setKeywordsInput] = useState<string>("");
   const [appendNote, setAppendNote] = useState<string>("");
 
+  const [rawFile, setRawFile] = useState<File | null>(null);
+  const [isDirty, setIsDirty] = useState<boolean>(false);
+
   // Find & Replace State
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [replaceQuery, setReplaceQuery] = useState<string>("");
@@ -75,6 +78,8 @@ export function OdtModifierStudio() {
       );
       const parsed = await parseOdtFile(sampleBlob);
       applyParsedDocument(parsed, "quarterly-strategy.odt");
+      setRawFile(null);
+      setIsDirty(false);
       setStatusMessage("Demo OpenDocument (.odt) template loaded.");
       setTimeout(() => setStatusMessage(null), 3000);
     } catch (err: any) {
@@ -88,9 +93,9 @@ export function OdtModifierStudio() {
     setOdtDoc(parsed);
     setFileName(name);
     setParagraphs(parsed.paragraphs.length > 0 ? parsed.paragraphs : ["Welcome to OpenPDF ODT Studio."]);
-    setTitle(parsed.metadata.title || name.replace(/\.[^/.]+$/, ""));
-    setCreator(parsed.metadata.creator || "OpenPDF User");
-    setSubject(parsed.metadata.subject || "OpenDocument Modification");
+    setTitle(parsed.metadata.title || "");
+    setCreator(parsed.metadata.creator || "");
+    setSubject(parsed.metadata.subject || "");
     setDescription(parsed.metadata.description || "");
     setKeywordsInput(parsed.metadata.keywords.join(", "));
     setAppendNote("");
@@ -112,6 +117,8 @@ export function OdtModifierStudio() {
     try {
       const parsed = await parseOdtFile(file);
       applyParsedDocument(parsed, file.name);
+      setRawFile(file);
+      setIsDirty(false);
       setStatusMessage(`Loaded "${file.name}" successfully!`);
       setTimeout(() => setStatusMessage(null), 3000);
     } catch (err: any) {
@@ -147,12 +154,14 @@ export function OdtModifierStudio() {
 
     const updatedParagraphs = paragraphs.map((p) => p.replace(regex, replaceQuery));
     setParagraphs(updatedParagraphs);
+    setIsDirty(true);
     setStatusMessage(`Replaced ${matchCount} occurrence(s) across document.`);
     setTimeout(() => setStatusMessage(null), 3000);
   };
 
   // Paragraph manipulations
   const handleUpdateParagraph = (index: number, value: string) => {
+    setIsDirty(true);
     setParagraphs((prev) => {
       const next = [...prev];
       next[index] = value;
@@ -161,15 +170,18 @@ export function OdtModifierStudio() {
   };
 
   const handleAddParagraph = () => {
+    setIsDirty(true);
     setParagraphs((prev) => [...prev, "New document paragraph..."]);
   };
 
   const handleRemoveParagraph = (index: number) => {
+    setIsDirty(true);
     setParagraphs((prev) => prev.filter((_, i) => i !== index));
   };
 
   // Metadata Sanitize
   const handleSanitizeMetadata = () => {
+    setIsDirty(true);
     setCreator("");
     setDescription("");
     setSubject("");
@@ -225,23 +237,29 @@ export function OdtModifierStudio() {
     setIsProcessing(true);
     setErrorMessage(null);
     try {
-      const odtBlob = await buildModifiedBlob();
       const base = fileName.replace(/\.[^/.]+$/, "");
-      const odtFile = new File([odtBlob], `${base}.odt`, {
-        type: "application/vnd.oasis.opendocument.text",
-      });
+      let odtFile: File;
+
+      if (!isDirty && rawFile) {
+        odtFile = rawFile;
+      } else {
+        const odtBlob = await buildModifiedBlob();
+        odtFile = new File([odtBlob], `${base}.odt`, {
+          type: "application/vnd.oasis.opendocument.text",
+        });
+      }
 
       let pdfBlob: Blob;
       try {
         pdfBlob = await convertDocument(odtFile, "pdf");
       } catch {
-        pdfBlob = await convertOdtToPdf(odtBlob, { title, author: creator, defaultTitle: base });
+        pdfBlob = await convertOdtToPdf(odtFile);
       }
 
       const url = URL.createObjectURL(pdfBlob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${base}-converted.pdf`;
+      a.download = `${base}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -259,11 +277,17 @@ export function OdtModifierStudio() {
     setIsProcessing(true);
     setErrorMessage(null);
     try {
-      const odtBlob = await buildModifiedBlob();
       const base = fileName.replace(/\.[^/.]+$/, "");
-      const odtFile = new File([odtBlob], `${base}.odt`, {
-        type: "application/vnd.oasis.opendocument.text",
-      });
+      let odtFile: File;
+
+      if (!isDirty && rawFile) {
+        odtFile = rawFile;
+      } else {
+        const odtBlob = await buildModifiedBlob();
+        odtFile = new File([odtBlob], `${base}.odt`, {
+          type: "application/vnd.oasis.opendocument.text",
+        });
+      }
 
       const docxBlob = await convertDocument(odtFile, "docx");
       const url = URL.createObjectURL(docxBlob);
@@ -472,7 +496,10 @@ export function OdtModifierStudio() {
             <input
               type="text"
               value={appendNote}
-              onChange={(e) => setAppendNote(e.target.value)}
+              onChange={(e) => {
+                setAppendNote(e.target.value);
+                setIsDirty(true);
+              }}
               placeholder="e.g. Confidential — For Internal Distribution Only"
               className="w-full px-3.5 py-2 rounded-xl bg-background border border-border/80 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
@@ -559,7 +586,10 @@ export function OdtModifierStudio() {
               <input
                 type="text"
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  setIsDirty(true);
+                }}
                 className="w-full px-3.5 py-2 rounded-xl bg-background border border-border/80 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
               />
             </div>
@@ -572,7 +602,10 @@ export function OdtModifierStudio() {
               <input
                 type="text"
                 value={creator}
-                onChange={(e) => setCreator(e.target.value)}
+                onChange={(e) => {
+                  setCreator(e.target.value);
+                  setIsDirty(true);
+                }}
                 className="w-full px-3.5 py-2 rounded-xl bg-background border border-border/80 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
               />
             </div>
@@ -585,7 +618,10 @@ export function OdtModifierStudio() {
               <input
                 type="text"
                 value={subject}
-                onChange={(e) => setSubject(e.target.value)}
+                onChange={(e) => {
+                  setSubject(e.target.value);
+                  setIsDirty(true);
+                }}
                 className="w-full px-3.5 py-2 rounded-xl bg-background border border-border/80 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
               />
             </div>
@@ -598,7 +634,10 @@ export function OdtModifierStudio() {
               <input
                 type="text"
                 value={keywordsInput}
-                onChange={(e) => setKeywordsInput(e.target.value)}
+                onChange={(e) => {
+                  setKeywordsInput(e.target.value);
+                  setIsDirty(true);
+                }}
                 className="w-full px-3.5 py-2 rounded-xl bg-background border border-border/80 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
               />
             </div>
@@ -611,7 +650,10 @@ export function OdtModifierStudio() {
             <textarea
               rows={2}
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => {
+                setDescription(e.target.value);
+                setIsDirty(true);
+              }}
               className="w-full px-3.5 py-2 rounded-xl bg-background border border-border/80 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>

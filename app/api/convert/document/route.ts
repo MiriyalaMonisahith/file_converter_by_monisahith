@@ -95,31 +95,25 @@ export async function POST(req: NextRequest) {
 
     // Execute conversion with LibreOffice, with automated zero-failure fallback
     const sofficePath = findLibreOfficePath();
-    const profileUrl = `file:///${tempDir.replace(/\\/g, "/")}/profile`;
 
-    // Build LibreOffice arguments
-    const args = [
-      "--headless",
-      "--invisible",
-      "--nodefault",
-      "--nofirststartwizard",
-      "--nolockcheck",
-      "--nologo",
-      "--norestore",
-      `-env:UserInstallation=${profileUrl}`,
-    ];
-
-    // If converting from PDF to an editable text format like ODT or DOCX, specify writer filter
-    if (ext === ".pdf" && (targetFormat === "odt" || targetFormat === "docx" || targetFormat === "txt")) {
-      args.push('--infilter="writer_pdf_import"');
+    // Clean, direct headless conversion flags that preserve exact layout, text, and details
+    const args = ["--headless", "--convert-to"];
+    if (ext === ".odt" && targetFormat === "pdf") {
+      args.push("pdf:writer_pdf_Export");
+    } else {
+      args.push(targetFormat);
     }
 
-    args.push("--convert-to", targetFormat, "--outdir", tempDir, inputPath);
+    if (ext === ".pdf" && (targetFormat === "odt" || targetFormat === "docx" || targetFormat === "txt")) {
+      args.push("--infilter=writer_pdf_import");
+    }
+
+    args.push("--outdir", tempDir, inputPath);
 
     let outputBuffer: Buffer | null = null;
 
     try {
-      await execFileAsync(sofficePath, args, { timeout: 45000 });
+      await execFileAsync(sofficePath, args, { timeout: 30000 });
 
       // Identify output file
       let expectedOutput = path.join(tempDir, `input.${targetFormat}`);
@@ -149,10 +143,7 @@ export async function POST(req: NextRequest) {
     if (!outputBuffer) {
       if (ext === ".odt" && targetFormat === "pdf") {
         const { renderOdtToPdfBuffer } = await import("@/lib/engines/odt-engine");
-        const pdfBytes = await renderOdtToPdfBuffer(Buffer.from(arrayBuffer), {
-          title: baseName,
-          defaultTitle: baseName,
-        });
+        const pdfBytes = await renderOdtToPdfBuffer(Buffer.from(arrayBuffer));
         outputBuffer = Buffer.from(pdfBytes);
       } else if (ext === ".txt" && targetFormat === "pdf") {
         const { txtToPDF } = await import("@/lib/engines/client-pdf");
@@ -237,10 +228,7 @@ export async function POST(req: NextRequest) {
         const { renderOdtToPdfBuffer } = await import("@/lib/engines/odt-engine");
         const buf = await file.arrayBuffer();
         const baseName = path.basename(file.name, path.extname(file.name));
-        const pdfBytes = await renderOdtToPdfBuffer(Buffer.from(buf), {
-          title: baseName,
-          defaultTitle: baseName,
-        });
+        const pdfBytes = await renderOdtToPdfBuffer(Buffer.from(buf));
         return new NextResponse(new Uint8Array(pdfBytes), {
           status: 200,
           headers: {
