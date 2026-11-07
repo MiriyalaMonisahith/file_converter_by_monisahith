@@ -26,6 +26,7 @@ import { BlurSensitiveStudio } from "@/components/studios/blur-sensitive-studio"
 import { WatermarkImageStudio } from "@/components/studios/watermark-image-studio";
 import { PaletteExtractorStudio } from "@/components/studios/palette-extractor-studio";
 import { OdtModifierStudio } from "@/components/studios/odt-modifier-studio";
+import { PhotoEnhancerStudio } from "@/components/studios/photo-enhancer-studio";
 
 import {
   ChevronRight,
@@ -107,6 +108,8 @@ export default function ToolDedicatedPage({ params }: PageProps) {
         return <WatermarkImageStudio />;
       case "palette-extractor":
         return <PaletteExtractorStudio />;
+      case "photo-enhancer":
+        return <PhotoEnhancerStudio />;
 
       // Standard Uploader
       default:

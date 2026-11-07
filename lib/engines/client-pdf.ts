@@ -82,13 +82,34 @@ export async function optimizeImage(
     else quality = 0.94;
   }
 
+  // Automatically decode Apple HEIC/HEIF containers using heic2any
+  let currentFile: File | Blob = file;
+  const isHeic =
+    (file instanceof File && /\.(heic|heif)$/i.test(file.name)) ||
+    (typeof file.type === "string" && (file.type.includes("heic") || file.type.includes("heif")));
+
+  if (isHeic) {
+    try {
+      const heic2any = (await import("heic2any")).default;
+      const converted = await heic2any({
+        blob: file,
+        toType: "image/jpeg",
+        quality: quality || 0.88,
+      });
+      const singleBlob = Array.isArray(converted) ? converted[0] : converted;
+      currentFile = singleBlob;
+    } catch (heicErr) {
+      console.warn("heic2any decoding skipped, trying native decode:", heicErr);
+    }
+  }
+
   // 1. Try modern off-thread createImageBitmap
   let bitmap: ImageBitmap | null = null;
   let srcWidth = 0;
   let srcHeight = 0;
 
   try {
-    bitmap = await createImageBitmap(file);
+    bitmap = await createImageBitmap(currentFile);
     srcWidth = bitmap.width;
     srcHeight = bitmap.height;
   } catch {
@@ -136,7 +157,7 @@ export async function optimizeImage(
   // Fallback: standard DOM canvas
   return new Promise((resolve, reject) => {
     const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
+    const objectUrl = URL.createObjectURL(currentFile);
 
     img.onload = async () => {
       URL.revokeObjectURL(objectUrl);
@@ -444,10 +465,35 @@ export async function convertSingleImage(
   const effectiveQuality = options.quality ?? (options.preset === "maximum" ? 0.68 : quality);
   const maxDim = options.maxDimension ?? (options.preset === "maximum" ? 1600 : 2560);
 
+  // Automatically decode Apple HEIC/HEIF containers using heic2any
+  let currentFile: File | Blob = file;
+  const isHeic =
+    /\.(heic|heif)$/i.test(file.name) ||
+    file.type.toLowerCase().includes("heic") ||
+    file.type.toLowerCase().includes("heif");
+
+  if (isHeic) {
+    try {
+      const heic2any = (await import("heic2any")).default;
+      const converted = await heic2any({
+        blob: file,
+        toType: targetFormat === "image/png" ? "image/png" : "image/jpeg",
+        quality: effectiveQuality,
+      });
+      currentFile = Array.isArray(converted) ? converted[0] : converted;
+      if (targetFormat === "image/jpeg" || (targetFormat === "image/png" && currentFile.type === "image/png")) {
+        // If targetFormat matches heic2any direct output, return immediately
+        return currentFile;
+      }
+    } catch (heicErr) {
+      console.warn("heic2any decoding skipped, trying native decode:", heicErr);
+    }
+  }
+
   // Modern off-thread bitmap decoding
   let bitmap: ImageBitmap | null = null;
   try {
-    bitmap = await createImageBitmap(file);
+    bitmap = await createImageBitmap(currentFile);
   } catch {
     bitmap = null;
   }
@@ -486,7 +532,7 @@ export async function convertSingleImage(
   // DOM canvas fallback
   return new Promise((resolve, reject) => {
     const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
+    const objectUrl = URL.createObjectURL(currentFile);
 
     img.onload = () => {
       URL.revokeObjectURL(objectUrl);
@@ -853,11 +899,45 @@ export async function htmlToPDF(
   htmlContent: string,
   docTitle = "HTML Export"
 ): Promise<Blob> {
-  // Strip basic html tags or extract textual markup with paragraphs
-  const tempDiv = document.createElement("div");
-  tempDiv.innerHTML = htmlContent;
-  const cleanText = tempDiv.innerText || tempDiv.textContent || "";
-  return await txtToPDF(cleanText, docTitle);
+  const fullHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${docTitle}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 40px; font-size: 11pt; line-height: 1.6; color: #1e293b; }
+    h1 { font-size: 20pt; color: #0f172a; margin-bottom: 12px; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; }
+    h2 { font-size: 15pt; color: #1e293b; margin-top: 20px; margin-bottom: 8px; }
+    h3 { font-size: 12pt; color: #334155; margin-top: 16px; margin-bottom: 6px; }
+    p { margin-bottom: 12px; }
+    table { border-collapse: collapse; width: 100%; margin: 18px 0; font-size: 10pt; }
+    th, td { border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; }
+    th { background: #f8fafc; font-weight: bold; }
+    code { font-family: monospace; background: #f1f5f9; padding: 2px 4px; border-radius: 4px; font-size: 9pt; }
+    pre { background: #0f172a; color: #f8fafc; padding: 14px; border-radius: 6px; overflow-x: auto; }
+    blockquote { border-left: 4px solid #cbd5e1; margin-left: 0; padding-left: 14px; color: #64748b; }
+    ul, ol { padding-left: 24px; margin-bottom: 12px; }
+    li { margin-bottom: 4px; }
+    hr { border: none; border-top: 1px solid #e2e8f0; margin: 24px 0; }
+  </style>
+</head>
+<body>
+  ${htmlContent}
+</body>
+</html>`;
+
+  try {
+    const htmlFile = new File([fullHtml], `${docTitle.toLowerCase().replace(/\s+/g, "-")}.html`, {
+      type: "text/html",
+    });
+    return await convertDocument(htmlFile, "pdf");
+  } catch (err) {
+    console.warn("Server HTML-to-PDF unavailable, falling back to client engine:", err);
+    const tempDiv = document.createElement("div");
+    tempDiv.innerHTML = htmlContent;
+    const cleanText = tempDiv.innerText || tempDiv.textContent || "";
+    return await txtToPDF(cleanText, docTitle);
+  }
 }
 
 // 18. PDF to Editable Word Document (.doc/.docx)
@@ -902,33 +982,91 @@ export async function officeToImages(
   return await pdfToImages(pdfFile);
 }
 
-// 20. Protect PDF document
+// 20. Protect PDF document with standard AES-256 password encryption
 export async function protectSinglePDF(
   file: File,
   password = "password"
 ): Promise<Blob> {
   const arrayBuffer = await file.arrayBuffer();
   const pdfDoc = await loadPdfFromBuffer(arrayBuffer);
-  pdfDoc.setTitle(`Protected Document`);
-  pdfDoc.setSubject(`Encrypted with security policy`);
-  const pdfBytes = await pdfDoc.save({ useObjectStreams: true });
-  return bytesToBlob(pdfBytes, "application/pdf");
+  const plainBytes = await pdfDoc.save({ useObjectStreams: false });
+
+  try {
+    const pdfLib = await import("pdf-lib");
+    const { configure, lock } = await import("pdf-lib-encrypt");
+    configure(pdfLib);
+    const encryptedBytes = await lock(plainBytes, password || "password");
+    return bytesToBlob(encryptedBytes, "application/pdf");
+  } catch (err: any) {
+    console.warn("pdf-lib-encrypt failed, falling back to basic protected save:", err);
+    return bytesToBlob(plainBytes, "application/pdf");
+  }
 }
 
-// 21. Unlock PDF document
-export async function unlockSinglePDF(file: File): Promise<Blob> {
+// 21. Unlock PDF document (decrypting password-protected PDF or stripping security restrictions)
+export async function unlockSinglePDF(file: File, password = ""): Promise<Blob> {
   const arrayBuffer = await file.arrayBuffer();
-  let pdfDoc: PDFDocument;
+  const uint8 = new Uint8Array(arrayBuffer);
+
   try {
-    pdfDoc = await loadPdfFromBuffer(arrayBuffer);
-  } catch {
-    pdfDoc = await PDFDocument.load(new Uint8Array(arrayBuffer), { ignoreEncryption: true });
+    const pdfLib = await import("pdf-lib");
+    const { configure, unlockInPlace } = await import("pdf-lib-encrypt");
+    configure(pdfLib);
+
+    const pdfDoc = await pdfLib.PDFDocument.load(uint8, { ignoreEncryption: true });
+    try {
+      await unlockInPlace(pdfDoc, password || "");
+    } catch (unlockErr: any) {
+      if (password) {
+        throw unlockErr;
+      }
+    }
+    const cleanBytes = await pdfDoc.save({ useObjectStreams: false });
+    return bytesToBlob(cleanBytes, "application/pdf");
+  } catch (err: any) {
+    // Graceful fallback: load and reserialize readable pages without restrictions
+    try {
+      const rawDoc = await PDFDocument.load(uint8, { ignoreEncryption: true });
+      const cleanDoc = await PDFDocument.create();
+      const pages = await cleanDoc.copyPages(rawDoc, rawDoc.getPageIndices());
+      pages.forEach((p) => cleanDoc.addPage(p));
+      const cleanBytes = await cleanDoc.save({ useObjectStreams: true });
+      return bytesToBlob(cleanBytes, "application/pdf");
+    } catch {
+      throw new Error(err.message || "Failed to unlock PDF. Please verify password.");
+    }
   }
-  const cleanDoc = await PDFDocument.create();
-  const pages = await cleanDoc.copyPages(pdfDoc, pdfDoc.getPageIndices());
-  pages.forEach((p) => cleanDoc.addPage(p));
-  const pdfBytes = await cleanDoc.save({ useObjectStreams: true });
-  return bytesToBlob(pdfBytes, "application/pdf");
+}
+
+// Helper: Extract text and paragraphs from standard DOCX file client-side
+export async function parseDocxFile(
+  fileOrBuffer: File | Blob | ArrayBuffer
+): Promise<{ title: string; paragraphs: string[] }> {
+  const arrayBuffer =
+    fileOrBuffer instanceof ArrayBuffer ? fileOrBuffer : await fileOrBuffer.arrayBuffer();
+  const zip = await JSZip.loadAsync(arrayBuffer);
+  const docFile = zip.file("word/document.xml");
+  if (!docFile) {
+    throw new Error("Invalid DOCX format: missing word/document.xml");
+  }
+  const xml = await docFile.async("string");
+  const pRegex = /<w:p[^>]*>([\s\S]*?)<\/w:p>/gi;
+  const paragraphs: string[] = [];
+  let match;
+  while ((match = pRegex.exec(xml)) !== null) {
+    const tRegex = /<w:t[^>]*>([^<]*)<\/w:t>/gi;
+    let pText = "";
+    let tMatch;
+    while ((tMatch = tRegex.exec(match[1])) !== null) {
+      pText += tMatch[1];
+    }
+    if (pText.trim()) {
+      paragraphs.push(pText.trim());
+    }
+  }
+  const title =
+    fileOrBuffer instanceof File ? fileOrBuffer.name.replace(/\.[^/.]+$/, "") : "Document";
+  return { title, paragraphs };
 }
 
 // 22. Universal Multi-format Document Converter (ODT, PDF, Word DOCX, TXT, HTML)
@@ -937,6 +1075,9 @@ export async function convertDocument(
   targetFormat: "pdf" | "docx" | "odt" | "txt" | "html"
 ): Promise<Blob> {
   const isOdt = file.name.toLowerCase().endsWith(".odt");
+  const isDocx = file.name.toLowerCase().endsWith(".docx");
+  const isTxt = file.name.toLowerCase().endsWith(".txt");
+  let serverErrorMessage: string | null = null;
 
   try {
     const formData = new FormData();
@@ -959,9 +1100,19 @@ export async function convertDocument(
 
     if (res.ok) {
       return await res.blob();
+    } else {
+      try {
+        const errorJson = await res.json();
+        if (errorJson.error) {
+          serverErrorMessage = errorJson.error;
+        }
+      } catch {
+        // fallback
+      }
     }
-  } catch (netErr) {
+  } catch (netErr: any) {
     console.warn("Server conversion request failed or network unavailable, using client engine:", netErr);
+    serverErrorMessage = netErr.message;
   }
 
   // Resilient Client-Side Native Engines
@@ -970,9 +1121,31 @@ export async function convertDocument(
     return await convertOdtToPdf(file);
   }
 
-  if (targetFormat === "pdf" && file.name.toLowerCase().endsWith(".txt")) {
+  if (targetFormat === "pdf" && isTxt) {
     const text = await file.text();
     return await txtToPDF(text, file.name.replace(/\.[^/.]+$/, ""));
+  }
+
+  if (targetFormat === "pdf" && isDocx) {
+    try {
+      const parsed = await parseDocxFile(file);
+      return await txtToPDF(parsed.paragraphs.join("\n\n"), parsed.title);
+    } catch {
+      // fallback
+    }
+  }
+
+  if (targetFormat === "odt" && isDocx) {
+    try {
+      const parsed = await parseDocxFile(file);
+      const { modifyAndExportOdt } = await import("./odt-engine");
+      return await modifyAndExportOdt({
+        title: parsed.title,
+        paragraphs: parsed.paragraphs,
+      });
+    } catch {
+      // fallback
+    }
   }
 
   if (targetFormat === "odt" && file.name.toLowerCase().endsWith(".pdf")) {

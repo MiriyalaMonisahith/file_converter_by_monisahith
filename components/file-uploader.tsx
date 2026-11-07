@@ -79,6 +79,7 @@ export function FileUploader({
 
   const [pdfPassword, setPdfPassword] = useState<string>("password123");
   const isProtectTool = tool?.id === "protect-pdf";
+  const isUnlockTool = tool?.id === "unlock-pdf";
 
   // Split PDF options
   const isSplitTool = tool?.id === "split-pdf";
@@ -287,7 +288,7 @@ export function FileUploader({
 
     // 9. Unlock PDF
     if (toolId === "unlock-pdf") {
-      const blob = await unlockSinglePDF(rawFile);
+      const blob = await unlockSinglePDF(rawFile, pdfPassword);
       return { blob, fileName: `${baseName}-unlocked.pdf` };
     }
 
@@ -568,14 +569,14 @@ export function FileUploader({
           </div>
         )}
 
-        {isProtectTool && (
+        {(isProtectTool || isUnlockTool) && (
           <div className="flex items-center gap-2 self-end md:self-auto">
             <Lock className="w-3.5 h-3.5 text-rose-500" />
             <input
               type="password"
               value={pdfPassword}
               onChange={(e) => setPdfPassword(e.target.value)}
-              placeholder="Set PDF Password"
+              placeholder={isUnlockTool ? "PDF Password (if required)" : "Set PDF Password"}
               className="px-2.5 py-1 text-xs bg-muted/70 border border-border/70 rounded-xl outline-none text-foreground font-semibold"
             />
           </div>

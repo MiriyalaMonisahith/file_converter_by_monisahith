@@ -39,6 +39,7 @@ import {
   Server,
   Sparkles,
   FileType,
+  Wand2,
 } from "lucide-react";
 import { ToolDefinition } from "@/types/tools";
 import { cn } from "@/lib/utils";
@@ -76,6 +77,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   Palette,
   Sparkles,
   FileType,
+  Wand2,
 };
 
 interface ToolCardProps {

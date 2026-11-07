@@ -84,9 +84,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Ephemeral sandboxed workspace
+    // Ephemeral sandboxed workspace with isolated LibreOffice profile
     const runId = randomUUID();
     tempDir = path.join(os.tmpdir(), `openpdf-doc-${runId}`);
+    const userProfileDir = path.join(tempDir, "lo_profile");
     await mkdir(tempDir, { recursive: true });
 
     const inputPath = path.join(tempDir, `input${ext}`);
@@ -95,25 +96,53 @@ export async function POST(req: NextRequest) {
 
     // Execute conversion with LibreOffice, with automated zero-failure fallback
     const sofficePath = findLibreOfficePath();
+    const userProfileUri = `file:///${userProfileDir.split(path.sep).join("/")}`;
 
     // Clean, direct headless conversion flags that preserve exact layout, text, and details
-    const args = ["--headless", "--convert-to"];
-    if (ext === ".odt" && targetFormat === "pdf") {
-      args.push("pdf:writer_pdf_Export");
-    } else {
-      args.push(targetFormat);
-    }
+    const args = [
+      `-env:UserInstallation=${userProfileUri}`,
+      "--headless",
+      "--invisible",
+      "--nologo",
+      "--nodefault",
+      "--nofirststartwizard",
+      "--nolockcheck",
+    ];
 
-    if (ext === ".pdf" && (targetFormat === "odt" || targetFormat === "docx" || targetFormat === "txt")) {
+    // Specify input filter before --convert-to if importing PDF
+    if (ext === ".pdf" && (targetFormat === "odt" || targetFormat === "docx" || targetFormat === "txt" || targetFormat === "html")) {
       args.push("--infilter=writer_pdf_import");
     }
 
-    args.push("--outdir", tempDir, inputPath);
+    // Determine optimal export filter name
+    let filterSpec = targetFormat;
+    if (targetFormat === "pdf") {
+      if (ext === ".odt" || ext === ".doc" || ext === ".docx" || ext === ".rtf" || ext === ".txt" || ext === ".html" || ext === ".htm") {
+        filterSpec = "pdf:writer_pdf_Export";
+      } else if (ext === ".xls" || ext === ".xlsx" || ext === ".csv") {
+        filterSpec = "pdf:calc_pdf_Export";
+      } else if (ext === ".ppt" || ext === ".pptx") {
+        filterSpec = "pdf:impress_pdf_Export";
+      }
+    } else if (targetFormat === "odt") {
+      filterSpec = "odt:writer8";
+    } else if (targetFormat === "docx") {
+      filterSpec = "docx";
+    } else if (targetFormat === "txt") {
+      filterSpec = "txt:Text (encoded):UTF8";
+    } else if (targetFormat === "html") {
+      filterSpec = "html:XHTML Writer File:UTF8";
+    }
+
+    args.push("--convert-to", filterSpec, "--outdir", tempDir, inputPath);
 
     let outputBuffer: Buffer | null = null;
 
     try {
-      await execFileAsync(sofficePath, args, { timeout: 30000 });
+      await execFileAsync(sofficePath, args, {
+        timeout: 30000,
+        env: { ...process.env, PYTHONHOME: undefined, PYTHONPATH: undefined },
+      });
 
       // Identify output file
       let expectedOutput = path.join(tempDir, `input.${targetFormat}`);

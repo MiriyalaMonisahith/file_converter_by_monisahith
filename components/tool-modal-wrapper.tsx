@@ -25,6 +25,7 @@ import { BlurSensitiveStudio } from "./studios/blur-sensitive-studio";
 import { WatermarkImageStudio } from "./studios/watermark-image-studio";
 import { PaletteExtractorStudio } from "./studios/palette-extractor-studio";
 import { OdtModifierStudio } from "./studios/odt-modifier-studio";
+import { PhotoEnhancerStudio } from "./studios/photo-enhancer-studio";
 
 interface ToolModalWrapperProps {
   tool: ToolDefinition | null;
@@ -79,6 +80,8 @@ export function ToolModalWrapper({ tool, onClose }: ToolModalWrapperProps) {
         return <WatermarkImageStudio />;
       case "palette-extractor":
         return <PaletteExtractorStudio />;
+      case "photo-enhancer":
+        return <PhotoEnhancerStudio />;
 
       // Standard batch & file conversion tools
       default:

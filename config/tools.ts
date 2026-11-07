@@ -774,6 +774,28 @@ export const TOOLS_REGISTRY: ToolDefinition[] = [
     route: "/tools/palette-extractor",
     interactiveStudio: true,
   },
+  {
+    id: "photo-enhancer",
+    name: "AI & 4K/8K Photo Enhancer",
+    shortDesc: "Enhance image clarity, sharpen pixel details, and upscale photos to crisp 4K and 8K ultra-resolution.",
+    description: "Hardware-accelerated super-resolution and pixel enhancement studio. Features adaptive unsharp masking, micro-contrast recovery, color vibrancy enhancement, and multi-stage upscaling to 4K (3840px) and 8K (7680px) ultra-high definition.",
+    section: "image",
+    category: "image-tools",
+    environment: "client",
+    accentColor: "from-amber-500 via-orange-500 to-rose-600",
+    badgeText: "4K & 8K Super-Res",
+    iconName: "Wand2",
+    acceptedFormats: {
+      "image/jpeg": [".jpg", ".jpeg"],
+      "image/png": [".png"],
+      "image/webp": [".webp"],
+      "image/heic": [".heic"],
+      "image/heif": [".heif"],
+    },
+    outputFormat: "Enhanced 4K/8K Image",
+    route: "/tools/photo-enhancer",
+    interactiveStudio: true,
+  },
 ];
 
 export const CATEGORIES = [

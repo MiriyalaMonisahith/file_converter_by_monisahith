@@ -28,9 +28,9 @@ export default function ImageToolsPage() {
 
       const matchesSubfilter =
         selectedSubfilter === "all" ||
-        (selectedSubfilter === "optimize" && (tool.id === "image-compressor" || tool.id === "image-resizer")) ||
+        (selectedSubfilter === "optimize" && (tool.id === "image-compressor" || tool.id === "image-resizer" || tool.id === "photo-enhancer")) ||
         (selectedSubfilter === "convert" && (tool.id === "image-converter" || tool.id === "heic-to-jpg" || tool.id === "image-to-pdf")) ||
-        (selectedSubfilter === "creative" && (tool.id === "blur-sensitive" || tool.id === "watermark-image" || tool.id === "palette-extractor"));
+        (selectedSubfilter === "creative" && (tool.id === "blur-sensitive" || tool.id === "watermark-image" || tool.id === "palette-extractor" || tool.id === "photo-enhancer"));
 
       const matchesSearch =
         searchQuery.trim() === "" ||
@@ -53,7 +53,7 @@ export default function ImageToolsPage() {
         <div className="max-w-4xl mx-auto text-center space-y-6">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold tracking-wide">
             <ImagePlus className="w-3.5 h-3.5" />
-            <span>Hardware-Accelerated Canvas &bull; 8 Image Utilities &bull; Zero Cloud Upload</span>
+            <span>Hardware-Accelerated Canvas &bull; 9 Image Utilities &bull; Zero Cloud Upload</span>
           </div>
 
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-foreground leading-[1.15]">
@@ -75,8 +75,8 @@ export default function ImageToolsPage() {
         {/* Filters */}
         <div className="flex items-center justify-start sm:justify-center overflow-x-auto pb-2 scrollbar-none gap-2">
           {[
-            { id: "all", label: "All Image Tools (8)" },
-            { id: "optimize", label: "Compress & Resize" },
+            { id: "all", label: "All Image Tools (9)" },
+            { id: "optimize", label: "Enhance, Compress & Resize" },
             { id: "convert", label: "Format Converters" },
             { id: "creative", label: "Redact, Watermark & Palette" },
           ].map((pill) => (

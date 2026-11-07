@@ -55,7 +55,8 @@ export async function POST(req: NextRequest) {
 
     // Create an isolated ephemeral directory in OS temp
     const runId = randomUUID();
-    tempDir = path.join(os.tmpdir(), `openpdf-${runId}`);
+    tempDir = path.join(os.tmpdir(), `openpdf-office-${runId}`);
+    const userProfileDir = path.join(tempDir, "lo_profile");
     await mkdir(tempDir, { recursive: true });
 
     const inputPath = path.join(tempDir, `input${ext}`);
@@ -64,23 +65,73 @@ export async function POST(req: NextRequest) {
     await writeFile(inputPath, buffer);
 
     const sofficePath = findLibreOfficePath();
+    const userProfileUri = `file:///${userProfileDir.split(path.sep).join("/")}`;
 
     // Execute direct LibreOffice headless conversion preserving exact document text and details
-    const convertFilter = ext === ".odt" ? "pdf:writer_pdf_Export" : "pdf";
-    await execFileAsync(
-      sofficePath,
-      ["--headless", "--convert-to", convertFilter, "--outdir", tempDir, inputPath],
-      { timeout: 30000 }
-    );
-
-    // Converted PDF will have the same basename as input, but with .pdf
-    const outputPath = path.join(tempDir, "input.pdf");
-
-    if (!existsSync(outputPath)) {
-      throw new Error("LibreOffice conversion finished but output PDF was not found.");
+    let convertFilter = "pdf";
+    if (ext === ".odt" || ext === ".doc" || ext === ".docx" || ext === ".rtf" || ext === ".txt") {
+      convertFilter = "pdf:writer_pdf_Export";
+    } else if (ext === ".xls" || ext === ".xlsx") {
+      convertFilter = "pdf:calc_pdf_Export";
+    } else if (ext === ".ppt" || ext === ".pptx") {
+      convertFilter = "pdf:impress_pdf_Export";
     }
 
-    const pdfBuffer = await readFile(outputPath);
+    const args = [
+      `-env:UserInstallation=${userProfileUri}`,
+      "--headless",
+      "--invisible",
+      "--nologo",
+      "--nodefault",
+      "--nofirststartwizard",
+      "--nolockcheck",
+      "--convert-to",
+      convertFilter,
+      "--outdir",
+      tempDir,
+      inputPath,
+    ];
+
+    let pdfBuffer: Buffer | null = null;
+
+    try {
+      await execFileAsync(sofficePath, args, {
+        timeout: 30000,
+        env: { ...process.env, PYTHONHOME: undefined, PYTHONPATH: undefined },
+      });
+
+      // Converted PDF will have the same basename as input, but with .pdf
+      let outputPath = path.join(tempDir, "input.pdf");
+      if (!existsSync(outputPath)) {
+        const { readdirSync } = await import("fs");
+        const files = readdirSync(tempDir);
+        const matched = files.find((f) => f.toLowerCase().endsWith(".pdf"));
+        if (matched) {
+          outputPath = path.join(tempDir, matched);
+        }
+      }
+
+      if (existsSync(outputPath)) {
+        pdfBuffer = await readFile(outputPath);
+      }
+    } catch (loErr) {
+      console.warn("LibreOffice direct office-to-pdf subprocess had an issue:", loErr);
+    }
+
+    // Zero-failure fallback for text and ODT formats
+    if (!pdfBuffer) {
+      if (ext === ".odt") {
+        const { renderOdtToPdfBuffer } = await import("@/lib/engines/odt-engine");
+        const pdfBytes = await renderOdtToPdfBuffer(buffer);
+        pdfBuffer = Buffer.from(pdfBytes);
+      } else if (ext === ".txt") {
+        const { txtToPDF } = await import("@/lib/engines/client-pdf");
+        const blob = await txtToPDF(buffer.toString("utf-8"), baseName);
+        pdfBuffer = Buffer.from(await blob.arrayBuffer());
+      } else {
+        throw new Error("LibreOffice conversion finished but output PDF was not found.");
+      }
+    }
 
     // Ephemeral cleanup: remove temp directory and files immediately
     try {
@@ -90,7 +141,7 @@ export async function POST(req: NextRequest) {
       // ignore cleanup errors
     }
 
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",

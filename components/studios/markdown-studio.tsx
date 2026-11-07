@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { BookOpen, Download, Code, Check, Eye, FileText, Upload } from "lucide-react";
-import { txtToPDF } from "@/lib/engines/client-pdf";
+import { htmlToPDF, txtToPDF } from "@/lib/engines/client-pdf";
 
 export function MarkdownStudio() {
   const [markdown, setMarkdown] = useState<string>(
@@ -86,10 +86,7 @@ const doc = await PDFDocument.create();
   const handleExportPDF = async () => {
     setIsProcessing(true);
     try {
-      const tempDiv = document.createElement("div");
-      tempDiv.innerHTML = renderedHtml;
-      const plainText = tempDiv.innerText || tempDiv.textContent || markdown;
-      const pdfBlob = await txtToPDF(plainText, docTitle);
+      const pdfBlob = await htmlToPDF(renderedHtml, docTitle);
 
       const downloadUrl = URL.createObjectURL(pdfBlob);
       const a = document.createElement("a");

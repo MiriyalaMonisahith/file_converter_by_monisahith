@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { FileCode, Download, Check, AlertCircle, FileText, Upload } from "lucide-react";
-import { txtToPDF } from "@/lib/engines/client-pdf";
+import { txtToPDF, convertDocument } from "@/lib/engines/client-pdf";
 
 export function TxtToDocStudio() {
   const [textContent, setTextContent] = useState<string>(
@@ -65,24 +65,50 @@ All operations respect complete end-to-end user privacy.`
     }
   };
 
-  const handleExportDocx = () => {
-    // Generate standard HTML-based Word document (.doc format widely compatible)
-    const html = `
-      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-      <head><title>${docTitle}</title></head>
-      <body style="font-family: Arial, sans-serif; line-height: 1.6; padding: 40px;">
-        <h2>${docTitle}</h2>
-        <pre style="font-family: inherit; white-space: pre-wrap;">${textContent}</pre>
-      </body>
-      </html>
-    `;
-    const blob = new Blob([html], { type: "application/msword;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${docTitle.toLowerCase().replace(/\s+/g, "-")}.doc`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleExportDocx = async () => {
+    if (!textContent.trim()) {
+      setErrorMessage("Please input or upload text to convert.");
+      return;
+    }
+
+    setIsProcessing(true);
+    setErrorMessage(null);
+    const base = docTitle.toLowerCase().replace(/\s+/g, "-");
+
+    try {
+      const txtFile = new File([textContent], `${base}.txt`, { type: "text/plain" });
+      let blob: Blob;
+      let ext = "docx";
+      try {
+        blob = await convertDocument(txtFile, "docx");
+      } catch {
+        const html = `
+          <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+          <head><title>${docTitle}</title></head>
+          <body style="font-family: Arial, sans-serif; line-height: 1.6; padding: 40px;">
+            <h2>${docTitle}</h2>
+            <pre style="font-family: inherit; white-space: pre-wrap;">${textContent}</pre>
+          </body>
+          </html>
+        `;
+        blob = new Blob([html], { type: "application/msword;charset=utf-8" });
+        ext = "doc";
+      }
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${base}.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err: any) {
+      setErrorMessage(err.message || "Failed to export Word document.");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
