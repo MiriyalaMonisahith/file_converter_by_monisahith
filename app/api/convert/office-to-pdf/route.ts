@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     const ext = path.extname(originalName).toLowerCase();
     const baseName = path.basename(originalName, ext);
 
-    const allowedExtensions = [".ppt", ".pptx", ".doc", ".docx", ".xls", ".xlsx", ".odt", ".rtf", ".txt"];
+    const allowedExtensions = [".ppt", ".pptx", ".pps", ".ppsx", ".pptm", ".doc", ".docx", ".xls", ".xlsx", ".odt", ".rtf", ".txt"];
     if (!allowedExtensions.includes(ext)) {
       return NextResponse.json(
         { error: `File format ${ext} is not supported by the document converter.` },
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
       convertFilter = "pdf:writer_pdf_Export";
     } else if (ext === ".xls" || ext === ".xlsx") {
       convertFilter = "pdf:calc_pdf_Export";
-    } else if (ext === ".ppt" || ext === ".pptx") {
+    } else if (ext === ".ppt" || ext === ".pptx" || ext === ".pps" || ext === ".ppsx" || ext === ".pptm") {
       convertFilter = "pdf:impress_pdf_Export";
     }
 
@@ -128,6 +128,10 @@ export async function POST(req: NextRequest) {
         const { txtToPDF } = await import("@/lib/engines/client-pdf");
         const blob = await txtToPDF(buffer.toString("utf-8"), baseName);
         pdfBuffer = Buffer.from(await blob.arrayBuffer());
+      } else if (ext === ".ppt" || ext === ".pptx" || ext === ".pps" || ext === ".ppsx" || ext === ".pptm") {
+        const { renderPptToPdfBuffer } = await import("@/lib/engines/ppt-engine");
+        const pdfBytes = await renderPptToPdfBuffer(buffer, baseName);
+        pdfBuffer = Buffer.from(pdfBytes);
       } else {
         throw new Error("LibreOffice conversion finished but output PDF was not found.");
       }

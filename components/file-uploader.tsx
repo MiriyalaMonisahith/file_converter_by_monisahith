@@ -125,7 +125,11 @@ export function FileUploader({
         for (const rej of fileRejections) {
           const name = rej?.file?.name || "";
           const ext = `.${name.split(".").pop()?.toLowerCase()}`;
-          if (allowedExts.includes(ext) || (tool?.id === "odt-to-pdf" && ext === ".odt")) {
+          if (
+            allowedExts.includes(ext) ||
+            (tool?.id === "odt-to-pdf" && ext === ".odt") ||
+            (tool?.id === "ppt-to-pdf" && /\.(pptx?|ppsx?|pptm)$/i.test(name))
+          ) {
             rescuedFiles.push(rej.file);
           } else {
             actualRejections.push(rej);
@@ -197,6 +201,9 @@ export function FileUploader({
         if (toolId === "odt-to-pdf" || rawFile.name.toLowerCase().endsWith(".odt")) {
           const { convertOdtToPdf } = await import("@/lib/engines/odt-engine");
           blob = await convertOdtToPdf(rawFile);
+        } else if (toolId === "ppt-to-pdf" || /\.(pptx?|ppsx?|pptm)$/i.test(rawFile.name)) {
+          const { convertPptToPdf } = await import("@/lib/engines/ppt-engine");
+          blob = await convertPptToPdf(rawFile);
         } else {
           throw convErr;
         }
@@ -318,9 +325,18 @@ export function FileUploader({
     }
 
     // Fallback: If it's an office file, convert to PDF; if PDF, optimize; if image, convert
-    if (/\.(pptx?|docx?|xlsx?|odt|rtf)$/i.test(rawFile.name)) {
-      const blob = await convertDocument(rawFile, "pdf");
-      return { blob, fileName: `${baseName}.pdf` };
+    if (/\.(pptx?|ppsx?|pptm|docx?|xlsx?|odt|rtf)$/i.test(rawFile.name)) {
+      try {
+        const blob = await convertDocument(rawFile, "pdf");
+        return { blob, fileName: `${baseName}.pdf` };
+      } catch (convErr) {
+        if (/\.(pptx?|ppsx?|pptm)$/i.test(rawFile.name)) {
+          const { convertPptToPdf } = await import("@/lib/engines/ppt-engine");
+          const blob = await convertPptToPdf(rawFile);
+          return { blob, fileName: `${baseName}.pdf` };
+        }
+        throw convErr;
+      }
     }
     const blob = await compressSinglePDF(rawFile, { preset: compressionPreset });
     return { blob, fileName: `${baseName}-processed.pdf` };

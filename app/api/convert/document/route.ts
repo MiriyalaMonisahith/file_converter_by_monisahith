@@ -69,6 +69,9 @@ export async function POST(req: NextRequest) {
       ".pdf",
       ".ppt",
       ".pptx",
+      ".pps",
+      ".ppsx",
+      ".pptm",
       ".xls",
       ".xlsx",
       ".rtf",
@@ -121,7 +124,7 @@ export async function POST(req: NextRequest) {
         filterSpec = "pdf:writer_pdf_Export";
       } else if (ext === ".xls" || ext === ".xlsx" || ext === ".csv") {
         filterSpec = "pdf:calc_pdf_Export";
-      } else if (ext === ".ppt" || ext === ".pptx") {
+      } else if (ext === ".ppt" || ext === ".pptx" || ext === ".pps" || ext === ".ppsx" || ext === ".pptm") {
         filterSpec = "pdf:impress_pdf_Export";
       }
     } else if (targetFormat === "odt") {
@@ -172,6 +175,10 @@ export async function POST(req: NextRequest) {
         const txtString = Buffer.from(arrayBuffer).toString("utf-8");
         const blob = await txtToPDF(txtString, baseName);
         outputBuffer = Buffer.from(await blob.arrayBuffer());
+      } else if ((ext === ".ppt" || ext === ".pptx" || ext === ".pps" || ext === ".ppsx" || ext === ".pptm") && targetFormat === "pdf") {
+        const { renderPptToPdfBuffer } = await import("@/lib/engines/ppt-engine");
+        const pdfBytes = await renderPptToPdfBuffer(Buffer.from(arrayBuffer), baseName);
+        outputBuffer = Buffer.from(pdfBytes);
       } else if (ext === ".odt" && targetFormat === "docx") {
         const { parseOdtFile } = await import("@/lib/engines/odt-engine");
         const doc = await parseOdtFile(Buffer.from(arrayBuffer));

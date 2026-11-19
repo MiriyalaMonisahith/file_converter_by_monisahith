@@ -1077,6 +1077,7 @@ export async function convertDocument(
   const isOdt = file.name.toLowerCase().endsWith(".odt");
   const isDocx = file.name.toLowerCase().endsWith(".docx");
   const isTxt = file.name.toLowerCase().endsWith(".txt");
+  const isPpt = /\.(pptx?|ppsx?|pptm)$/i.test(file.name);
   let serverErrorMessage: string | null = null;
 
   try {
@@ -1119,6 +1120,11 @@ export async function convertDocument(
   if (isOdt && targetFormat === "pdf") {
     const { convertOdtToPdf } = await import("./odt-engine");
     return await convertOdtToPdf(file);
+  }
+
+  if (targetFormat === "pdf" && isPpt) {
+    const { convertPptToPdf } = await import("./ppt-engine");
+    return await convertPptToPdf(file);
   }
 
   if (targetFormat === "pdf" && isTxt) {
@@ -1201,6 +1207,9 @@ export async function odtToImages(
 
 // Re-export ODT Engine functionalities for in-browser manipulation
 export * from "./odt-engine";
+
+// Re-export PPT Engine functionalities for in-browser manipulation
+export * from "./ppt-engine";
 
 
 
