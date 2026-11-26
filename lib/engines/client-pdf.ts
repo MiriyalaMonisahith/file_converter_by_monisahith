@@ -1,6 +1,7 @@
 import { PDFDocument, degrees, rgb, StandardFonts } from "pdf-lib";
 import JSZip from "jszip";
 import { CompressionPreset, OptimizationOptions } from "@/types/tools";
+import { sanitizePdfText } from "./ppt-engine";
 
 /**
  * Ultra-Fast & Size-Optimized Client-Side PDF & Media Operations
@@ -708,24 +709,46 @@ export async function watermarkPDF(
     b = parseInt(options.colorHex.slice(5, 7), 16) / 255;
   }
 
+  const safeWatermarkText = sanitizePdfText(text, font);
+
   pages.forEach((page) => {
     const { width, height } = page.getSize();
-    const textWidth = font.widthOfTextAtSize(text, fontSize);
+    let textWidth = 100;
+    try {
+      textWidth = font.widthOfTextAtSize(safeWatermarkText, fontSize);
+    } catch {
+      textWidth = safeWatermarkText.length * (fontSize * 0.55);
+    }
     const textHeight = font.heightAtSize(fontSize);
 
     // Center positioning
     const x = (width - textWidth) / 2;
     const y = (height - textHeight) / 2;
 
-    page.drawText(text, {
-      x,
-      y,
-      size: fontSize,
-      font,
-      color: rgb(r, g, b),
-      opacity,
-      rotate: degrees(rotation),
-    });
+    try {
+      page.drawText(safeWatermarkText, {
+        x,
+        y,
+        size: fontSize,
+        font,
+        color: rgb(r, g, b),
+        opacity,
+        rotate: degrees(rotation),
+      });
+    } catch {
+      try {
+        const asciiOnly = text.replace(/[^\x20-\x7E\xA0-\xFF]/g, " ");
+        page.drawText(asciiOnly, {
+          x,
+          y,
+          size: fontSize,
+          font,
+          color: rgb(r, g, b),
+          opacity,
+          rotate: degrees(rotation),
+        });
+      } catch {}
+    }
   });
 
   const pdfBytes = await pdfDoc.save({ useObjectStreams: true });
@@ -826,8 +849,9 @@ export async function txtToPDF(
   const USABLE_HEIGHT = PAGE_HEIGHT - MARGIN * 2;
   const LINES_PER_PAGE = Math.floor(USABLE_HEIGHT / LINE_HEIGHT) - 3;
 
-  // Split content into wrapped lines
-  const rawParagraphs = textContent.replace(/\r\n/g, "\n").split("\n");
+  // Split content into wrapped lines with Unicode symbol sanitization
+  const safeContent = sanitizePdfText(textContent, font);
+  const rawParagraphs = safeContent.replace(/\r\n/g, "\n").split("\n");
   const wrappedLines: string[] = [];
 
   for (const para of rawParagraphs) {
@@ -839,7 +863,12 @@ export async function txtToPDF(
     let currentLine = "";
     for (const word of words) {
       const testLine = currentLine ? `${currentLine} ${word}` : word;
-      const testWidth = font.widthOfTextAtSize(testLine, FONT_SIZE);
+      let testWidth = 0;
+      try {
+        testWidth = font.widthOfTextAtSize(testLine, FONT_SIZE);
+      } catch {
+        testWidth = testLine.length * (FONT_SIZE * 0.55);
+      }
       if (testWidth > USABLE_WIDTH && currentLine) {
         wrappedLines.push(currentLine);
         currentLine = word;
@@ -858,24 +887,39 @@ export async function txtToPDF(
     const pageLines = wrappedLines.slice(startLineIndex, startLineIndex + LINES_PER_PAGE);
 
     // Header on top
-    page.drawText(docTitle, {
-      x: MARGIN,
-      y: PAGE_HEIGHT - 35,
-      size: 9,
-      font: boldFont,
-      color: rgb(0.4, 0.4, 0.4),
-    });
+    try {
+      page.drawText(sanitizePdfText(docTitle, boldFont), {
+        x: MARGIN,
+        y: PAGE_HEIGHT - 35,
+        size: 9,
+        font: boldFont,
+        color: rgb(0.4, 0.4, 0.4),
+      });
+    } catch {}
 
     let currentY = PAGE_HEIGHT - MARGIN - 15;
     for (const line of pageLines) {
       if (line) {
-        page.drawText(line, {
-          x: MARGIN,
-          y: currentY,
-          size: FONT_SIZE,
-          font,
-          color: rgb(0.1, 0.1, 0.1),
-        });
+        try {
+          page.drawText(line, {
+            x: MARGIN,
+            y: currentY,
+            size: FONT_SIZE,
+            font,
+            color: rgb(0.1, 0.1, 0.1),
+          });
+        } catch {
+          try {
+            const asciiOnly = line.replace(/[^\x20-\x7E\xA0-\xFF]/g, " ");
+            page.drawText(asciiOnly, {
+              x: MARGIN,
+              y: currentY,
+              size: FONT_SIZE,
+              font,
+              color: rgb(0.1, 0.1, 0.1),
+            });
+          } catch {}
+        }
       }
       currentY -= LINE_HEIGHT;
     }

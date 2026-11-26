@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { UploadedFileItem, ToolDefinition, CompressionPreset } from "@/types/tools";
 import { formatFileSize, cn } from "@/lib/utils";
+import { FormatIcon, ToolSymbolIcon, ConverterFormatBadge } from "./format-icon";
 import {
   mergePDFs,
   rotateSinglePDF,
@@ -798,8 +799,18 @@ export function FileUploader({
         <div className="absolute inset-0 rounded-3xl bg-gradient-to-b from-rose-500/5 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" />
 
         <div className="w-16 h-16 mb-4 rounded-2xl bg-rose-500/10 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
-          <UploadCloud className="w-8 h-8" />
+          {tool ? (
+            <ToolSymbolIcon toolId={tool.id} iconName={tool.iconName} className="w-8 h-8 stroke-[2]" />
+          ) : (
+            <UploadCloud className="w-8 h-8" />
+          )}
         </div>
+
+        {tool && (
+          <div className="mb-2">
+            <ConverterFormatBadge toolId={tool.id} size="md" />
+          </div>
+        )}
 
         <h4 className="text-lg font-bold text-foreground mb-1">
           {isDragActive ? "Drop your files here!" : "Select Files or Drag & Drop"}
@@ -908,8 +919,8 @@ export function FileUploader({
                   className="flex items-center justify-between p-3.5 rounded-2xl bg-muted/30 border border-border/60 hover:bg-muted/50 transition-colors gap-3"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-card border border-border/70 flex items-center justify-center flex-shrink-0 text-muted-foreground">
-                      <FileIcon className="w-4 h-4" />
+                    <div className="w-9 h-9 rounded-xl bg-card border border-border/70 flex items-center justify-center flex-shrink-0 shadow-xs">
+                      <FormatIcon nameOrExt={item.file.name} className="w-5 h-5" />
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs font-semibold text-foreground truncate max-w-[200px] sm:max-w-xs md:max-w-md">
@@ -919,7 +930,7 @@ export function FileUploader({
                         <span>{formatFileSize(item.file.size)}</span>
                         {item.outputSize && (
                           <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                            &rarr; {formatFileSize(item.outputSize)}
+                            → {formatFileSize(item.outputSize)}
                           </span>
                         )}
                       </div>

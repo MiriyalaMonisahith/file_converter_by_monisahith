@@ -24,6 +24,7 @@ import {
 import { TOOLS_REGISTRY } from "@/config/tools";
 import { ToolDefinition } from "@/types/tools";
 import { cn } from "@/lib/utils";
+import { FormatIcon, ConverterFormatBadge } from "./format-icon";
 
 interface HeroSmartDropzoneProps {
   onLaunchToolWithFile: (tool: ToolDefinition, file: File) => void;
@@ -413,8 +414,8 @@ export function HeroSmartDropzone({ onLaunchToolWithFile }: HeroSmartDropzonePro
               {/* Header: File Details & Reset Button */}
               <div className="flex items-center justify-between pb-4 border-b border-border/60">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-500 to-amber-500 flex items-center justify-center text-white shrink-0 shadow-md">
-                    <FileText className="w-5 h-5" />
+                  <div className="w-10 h-10 rounded-xl bg-card border border-border/70 flex items-center justify-center shrink-0 shadow-md">
+                    <FormatIcon nameOrExt={selectedFile.name} className="w-5 h-5" />
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -465,9 +466,12 @@ export function HeroSmartDropzone({ onLaunchToolWithFile }: HeroSmartDropzonePro
                           >
                             <Icon className="w-4 h-4 stroke-[2]" />
                           </div>
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-background border border-border/60 text-muted-foreground">
-                            {action.badge}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <ConverterFormatBadge toolId={action.toolId} size="sm" />
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-background border border-border/60 text-muted-foreground">
+                              {action.badge}
+                            </span>
+                          </div>
                         </div>
                         <h4 className="font-bold text-xs sm:text-sm text-foreground group-hover/action:text-rose-500 transition-colors">
                           {action.label}

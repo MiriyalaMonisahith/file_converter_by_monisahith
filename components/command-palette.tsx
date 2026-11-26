@@ -49,6 +49,7 @@ import {
 import { TOOLS_REGISTRY, SECTIONS_CONFIG } from "@/config/tools";
 import { ToolDefinition } from "@/types/tools";
 import { cn } from "@/lib/utils";
+import { ToolSymbolIcon, ConverterFormatBadge } from "./format-icon";
 
 const ICON_MAP: Record<string, React.ElementType> = {
   Layers,
@@ -297,21 +298,22 @@ export function CommandPalette({ isOpen, onClose, onSelectTool }: CommandPalette
                     )}
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
-                      {/* Tool Icon Badge */}
+                      {/* Tool Icon Badge with authentic symbol */}
                       <div
                         className={cn(
                           "w-8 h-8 rounded-lg flex items-center justify-center text-white shrink-0 bg-gradient-to-br shadow-sm",
                           tool.accentColor
                         )}
                       >
-                        <IconComponent className="w-4 h-4 stroke-[2]" />
+                        <ToolSymbolIcon toolId={tool.id} iconName={tool.iconName} className="w-4 h-4 stroke-[2]" />
                       </div>
 
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="font-semibold text-xs sm:text-sm text-foreground truncate">
                             {tool.name}
                           </span>
+                          <ConverterFormatBadge toolId={tool.id} size="sm" />
                           {isRecent && (
                             <span className="text-[10px] px-1.5 py-0.2 rounded bg-muted text-muted-foreground font-mono">
                               Recent

@@ -102,7 +102,7 @@ export function OrganizePdfStudio() {
       {pdfFile && pageIndices.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Arrange page order (Sequence: {pageIndices.map((i) => i + 1).join(" &rarr; ")})</span>
+            <span>Arrange page order (Sequence: {pageIndices.map((i) => i + 1).join(" → ")})</span>
             <span>{pageIndices.length} total pages</span>
           </div>
 

@@ -61,13 +61,114 @@ function decodeXmlEntities(str: string): string {
     });
 }
 
+const UNICODE_SYMBOL_REPLACEMENTS: Record<string, string> = {
+  // Arrows
+  "→": "->",
+  "←": "<-",
+  "↔": "<->",
+  "⇒": "=>",
+  "⇐": "<=",
+  "➜": "->",
+  "➔": "->",
+  "➤": ">",
+  "►": ">",
+  "◄": "<",
+  "▲": "^",
+  "▼": "v",
+
+  // Bullets & shapes
+  "●": "•",
+  "■": "•",
+  "◆": "•",
+  "▪": "•",
+  "▫": "•",
+  "○": "o",
+  "□": "[]",
+  "◇": "<>",
+
+  // Checkmarks & crosses
+  "✔": "[✓]",
+  "✓": "[✓]",
+  "☑": "[✓]",
+  "✕": "[x]",
+  "✗": "[x]",
+  "☒": "[x]",
+
+  // Stars & badges
+  "★": "*",
+  "☆": "*",
+  "✪": "*",
+
+  // Currency
+  "₹": "Rs.",
+  "€": "EUR",
+
+  // Math symbols
+  "≤": "<=",
+  "≥": ">=",
+  "≠": "!=",
+  "≈": "~=",
+  "∑": "SUM",
+  "√": "SQRT",
+  "∞": "inf",
+  "µ": "u",
+  "×": "x",
+  "÷": "/",
+  "±": "+/-",
+  "°": " deg",
+  "π": "pi",
+  "α": "alpha",
+  "β": "beta",
+};
+
+export function sanitizePdfText(text: string, font?: any): string {
+  if (!text) return "";
+
+  let sanitized = text;
+  for (const [sym, rep] of Object.entries(UNICODE_SYMBOL_REPLACEMENTS)) {
+    if (sanitized.includes(sym)) {
+      sanitized = sanitized.replaceAll(sym, rep);
+    }
+  }
+
+  if (font) {
+    let result = "";
+    for (const char of sanitized) {
+      try {
+        font.widthOfTextAtSize(char, 12);
+        result += char;
+      } catch {
+        result += " ";
+      }
+    }
+    return result;
+  }
+
+  return sanitized;
+}
+
+function safeDrawText(page: any, text: string, options: any, font?: any) {
+  try {
+    const safe = sanitizePdfText(text, font || options.font);
+    page.drawText(safe, options);
+  } catch {
+    try {
+      const asciiOnly = text.replace(/[^\x20-\x7E\xA0-\xFF]/g, " ");
+      page.drawText(asciiOnly, options);
+    } catch {
+      // Graceful fallback: avoid crashing entire presentation
+    }
+  }
+}
+
 function wrapText(
   text: string,
   font: any,
   fontSize: number,
   maxWidth: number
 ): string[] {
-  const clean = text.replace(/[\r\n\t]+/g, " ").trim();
+  const safe = sanitizePdfText(text, font);
+  const clean = safe.replace(/[\r\n\t]+/g, " ").trim();
   if (!clean) return [];
 
   const words = clean.split(/\s+/);
@@ -375,13 +476,13 @@ export async function renderPptToPdfBuffer(
     const titleLines = wrapText(slide.title, helveticaBold, titleFontSize, contentWidth);
 
     for (const line of titleLines) {
-      page.drawText(line, {
+      safeDrawText(page, line, {
         x: marginX,
         y: currentY,
         size: titleFontSize,
         font: helveticaBold,
         color: rgb(0.09, 0.12, 0.18),
-      });
+      }, helveticaBold);
       currentY -= titleFontSize + 6;
     }
 
@@ -390,13 +491,13 @@ export async function renderPptToPdfBuffer(
       currentY -= 4;
       const subLines = wrapText(slide.subtitle, helveticaOblique, 15, contentWidth);
       for (const line of subLines) {
-        page.drawText(line, {
+        safeDrawText(page, line, {
           x: marginX,
           y: currentY,
           size: 15,
           font: helveticaOblique,
           color: rgb(0.35, 0.4, 0.48),
-        });
+        }, helveticaOblique);
         currentY -= 20;
       }
     }
@@ -456,24 +557,24 @@ export async function renderPptToPdfBuffer(
       if (bulletLines.length === 0) continue;
 
       // Draw bullet mark
-      page.drawText("•", {
+      safeDrawText(page, "•", {
         x: marginX + 6,
         y: currentY,
         size: bodyFontSize + 2,
         font: helveticaBold,
         color: rgb(0.92, 0.35, 0.14),
-      });
+      }, helveticaBold);
 
       // Draw wrapped bullet text
       for (let bi = 0; bi < bulletLines.length; bi++) {
         const bLine = bulletLines[bi];
-        page.drawText(bLine, {
+        safeDrawText(page, bLine, {
           x: marginX + 22,
           y: currentY,
           size: bodyFontSize,
           font: helvetica,
           color: rgb(0.18, 0.22, 0.28),
-        });
+        }, helvetica);
         currentY -= bodyLineHeight;
         if (currentY < 60) break;
       }
@@ -503,13 +604,13 @@ export async function renderPptToPdfBuffer(
         ? `${presentation.title.slice(0, 48)}...`
         : presentation.title;
 
-    page.drawText(footerTitle, {
+    safeDrawText(page, footerTitle, {
       x: marginX,
       y: footerY,
       size: 10,
       font: helvetica,
       color: rgb(0.55, 0.6, 0.68),
-    });
+    }, helvetica);
 
     // Right: Slide pagination
     const pageStr = `Slide ${slide.slideIndex} of ${presentation.slideCount}`;
@@ -520,13 +621,13 @@ export async function renderPptToPdfBuffer(
       // fallback
     }
 
-    page.drawText(pageStr, {
+    safeDrawText(page, pageStr, {
       x: slideW - marginX - pageStrW,
       y: footerY,
       size: 10,
       font: helvetica,
       color: rgb(0.55, 0.6, 0.68),
-    });
+    }, helvetica);
   }
 
   return await pdfDoc.save({ useObjectStreams: true });

@@ -6,6 +6,8 @@ import { TOOLS_REGISTRY, SECTIONS_CONFIG } from "@/config/tools";
 import { ToolDefinition } from "@/types/tools";
 import { FileUploader } from "@/components/file-uploader";
 import { ToolCard } from "@/components/tool-card";
+import { ToolSymbolIcon, ConverterFormatBadge } from "@/components/format-icon";
+import { cn } from "@/lib/utils";
 
 // Studio components
 import { CaseConverterStudio } from "@/components/studios/case-converter-studio";
@@ -151,12 +153,22 @@ export default function ToolDedicatedPage({ params }: PageProps) {
 
       {/* Main Tool Content Container */}
       <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
-        {/* Tool Header */}
-        <div className="space-y-4 text-center max-w-3xl mx-auto">
-          <div className="flex items-center justify-center gap-2">
+        {/* Tool Header with Dedicated Symbol */}
+        <div className="space-y-4 text-center max-w-3xl mx-auto flex flex-col items-center">
+          <div
+            className={cn(
+              "w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-xl bg-gradient-to-br",
+              tool.accentColor
+            )}
+          >
+            <ToolSymbolIcon toolId={tool.id} iconName={tool.iconName} className="w-8 h-8 stroke-[2]" />
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-2">
             <span className="text-xs font-bold uppercase tracking-wider text-rose-500 bg-rose-500/10 px-3 py-1 rounded-full border border-rose-500/20">
               {sectionMeta?.title || "Utility"}
             </span>
+            <ConverterFormatBadge toolId={tool.id} size="md" />
             {tool.environment === "client" ? (
               <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                 <Cpu className="w-3.5 h-3.5" />
@@ -174,7 +186,7 @@ export default function ToolDedicatedPage({ params }: PageProps) {
             {tool.name}
           </h1>
 
-          <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
+          <p className="text-sm sm:text-base text-muted-foreground leading-relaxed max-w-2xl">
             {tool.description}
           </p>
         </div>

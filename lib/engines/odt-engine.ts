@@ -1,5 +1,6 @@
 import JSZip from "jszip";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { sanitizePdfText } from "./ppt-engine";
 
 export interface ParsedOdtMetadata {
   title: string;
@@ -679,10 +680,26 @@ export async function renderOdtToPdfBuffer(
   const MARGIN_BOTTOM = 48;
   const CONTENT_WIDTH = PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT;
 
+  // Safe symbol drawing helper to avoid WinAnsi crashes on special characters
+  function safeDrawOdtText(targetPage: any, text: string, options: any, font: any) {
+    try {
+      const safe = sanitizePdfText(text, font);
+      targetPage.drawText(safe, options);
+    } catch {
+      try {
+        const asciiOnly = text.replace(/[^\x20-\x7E\xA0-\xFF]/g, " ");
+        targetPage.drawText(asciiOnly, options);
+      } catch {
+        // graceful ignore
+      }
+    }
+  }
+
   // Word wrapping utility preserving original words
   function wrapText(text: string, font: any, size: number, maxWidth: number): string[] {
+    const safeText = sanitizePdfText(text, font);
     const lines: string[] = [];
-    const paragraphs = text.split("\n");
+    const paragraphs = safeText.split("\n");
 
     for (const p of paragraphs) {
       const trimmed = p.trim();
@@ -695,7 +712,13 @@ export async function renderOdtToPdfBuffer(
 
       for (const word of words) {
         const candidate = currentLine ? `${currentLine} ${word}` : word;
-        const width = font.widthOfTextAtSize(candidate, size);
+        let width = 0;
+        try {
+          width = font.widthOfTextAtSize(candidate, size);
+        } catch {
+          width = candidate.length * (size * 0.55);
+        }
+
         if (width <= maxWidth) {
           currentLine = candidate;
         } else {
@@ -822,13 +845,14 @@ export async function renderOdtToPdfBuffer(
           let textY = cellY + rowHeight - 13;
           for (const line of lines) {
             if (line) {
-              page.drawText(line, {
+              const cellFont = rowIdx === 0 ? fontBold : fontRegular;
+              safeDrawOdtText(page, line, {
                 x: cellX + 5,
                 y: textY,
                 size: 9.5,
-                font: rowIdx === 0 ? fontBold : fontRegular,
+                font: cellFont,
                 color: rgb(0.1, 0.15, 0.22),
-              });
+              }, cellFont);
             }
             textY -= 13;
           }
@@ -871,13 +895,13 @@ export async function renderOdtToPdfBuffer(
       const wrapped = wrapText(el.text || "", font, fontSize, CONTENT_WIDTH);
       for (const line of wrapped) {
         ensurePageSpace(lineHeight + 4);
-        page.drawText(line, {
+        safeDrawOdtText(page, line, {
           x: MARGIN_LEFT,
           y: yPos - lineHeight + 4,
           size: fontSize,
           font,
           color,
-        });
+        }, font);
         yPos -= lineHeight;
       }
       yPos -= isH1 ? 6 : 4;
@@ -892,13 +916,13 @@ export async function renderOdtToPdfBuffer(
         const wrapped = wrapText(el.text, fontRegular, 10.5, CONTENT_WIDTH);
         for (const line of wrapped) {
           ensurePageSpace(16);
-          page.drawText(line, {
+          safeDrawOdtText(page, line, {
             x: MARGIN_LEFT,
             y: yPos - 12,
             size: 10.5,
             font: fontRegular,
             color: rgb(0.12, 0.16, 0.22),
-          });
+          }, fontRegular);
           yPos -= 15.5;
         }
         yPos -= 5;

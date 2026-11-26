@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 import { ToolDefinition } from "@/types/tools";
 import { cn } from "@/lib/utils";
+import { ToolSymbolIcon, ConverterFormatBadge, CONVERTER_FORMATS } from "./format-icon";
 
 const ICON_MAP: Record<string, React.ElementType> = {
   Layers,
@@ -122,7 +123,7 @@ export function ToolCard({
               tool.accentColor
             )}
           >
-            <IconComponent className="w-6 h-6 stroke-[2]" />
+            <ToolSymbolIcon toolId={tool.id} iconName={tool.iconName} className="w-6 h-6 stroke-[2]" />
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -199,11 +200,14 @@ export function ToolCard({
 
       {/* Footer tags */}
       <div className="mt-5 pt-4 border-t border-border/50 flex items-center justify-between text-xs text-muted-foreground/80">
-        <span className="font-mono text-[11px] uppercase tracking-wider font-medium text-foreground/70">
-          Output: {tool.outputFormat}
-        </span>
+        <ConverterFormatBadge toolId={tool.id} size="sm" />
+        {!CONVERTER_FORMATS[tool.id] && (
+          <span className="font-mono text-[11px] uppercase tracking-wider font-medium text-foreground/70">
+            Output: {tool.outputFormat}
+          </span>
+        )}
         <span className="text-[11px] font-medium text-primary group-hover:underline">
-          Open tool &rarr;
+          Open tool →
         </span>
       </div>
     </motion.div>

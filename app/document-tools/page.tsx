@@ -72,7 +72,7 @@ export default function DocumentToolsPage() {
 
         <div className="max-w-4xl mx-auto text-center space-y-6">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-semibold tracking-wide">
-            <Presentation className="w-3.5 h-3.5" />
+            <FileText className="w-3.5 h-3.5" />
             <span>Document & Office Suite &bull; {SECTION_TOOL_COUNTS.document} Tools &bull; Word, Excel, PPT, ODT, TXT & Markdown</span>
           </div>
 
