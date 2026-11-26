@@ -64,58 +64,76 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(arrayBuffer);
     await writeFile(inputPath, buffer);
 
-    const sofficePath = findLibreOfficePath();
-    const userProfileUri = `file:///${userProfileDir.split(path.sep).join("/")}`;
+    let pdfBuffer: Buffer | null = null;
+    const isPresentation = [".ppt", ".pptx", ".pps", ".ppsx", ".pptm"].includes(ext);
 
-    // Execute direct LibreOffice headless conversion preserving exact document text and details
-    let convertFilter = "pdf";
-    if (ext === ".odt" || ext === ".doc" || ext === ".docx" || ext === ".rtf" || ext === ".txt") {
-      convertFilter = "pdf:writer_pdf_Export";
-    } else if (ext === ".xls" || ext === ".xlsx") {
-      convertFilter = "pdf:calc_pdf_Export";
-    } else if (ext === ".ppt" || ext === ".pptx" || ext === ".pps" || ext === ".ppsx" || ext === ".pptm") {
-      convertFilter = "pdf:impress_pdf_Export";
+    // 1. Primary Microsoft PowerPoint Engine: Exact 1:1 pixel-perfect native slide fidelity
+    if (isPresentation) {
+      try {
+        const { convertWithMicrosoftPowerPoint } = await import("@/lib/engines/powerpoint-native");
+        const expectedPdf = path.join(tempDir, "input.pdf");
+        const msSuccess = await convertWithMicrosoftPowerPoint(inputPath, expectedPdf);
+        if (msSuccess && existsSync(expectedPdf)) {
+          pdfBuffer = await readFile(expectedPdf);
+        }
+      } catch (msErr) {
+        console.warn("Microsoft PowerPoint native COM conversion had an issue, falling back to LibreOffice:", msErr);
+      }
     }
 
-    const args = [
-      `-env:UserInstallation=${userProfileUri}`,
-      "--headless",
-      "--invisible",
-      "--nologo",
-      "--nodefault",
-      "--nofirststartwizard",
-      "--nolockcheck",
-      "--convert-to",
-      convertFilter,
-      "--outdir",
-      tempDir,
-      inputPath,
-    ];
+    // 2. Execute conversion with LibreOffice if not already converted
+    if (!pdfBuffer) {
+      const sofficePath = findLibreOfficePath();
+      const userProfileUri = `file:///${userProfileDir.split(path.sep).join("/")}`;
 
-    let pdfBuffer: Buffer | null = null;
+      // Execute direct LibreOffice headless conversion preserving exact document text and details
+      let convertFilter = "pdf";
+      if (ext === ".odt" || ext === ".doc" || ext === ".docx" || ext === ".rtf" || ext === ".txt") {
+        convertFilter = "pdf:writer_pdf_Export";
+      } else if (ext === ".xls" || ext === ".xlsx") {
+        convertFilter = "pdf:calc_pdf_Export";
+      } else if (ext === ".ppt" || ext === ".pptx" || ext === ".pps" || ext === ".ppsx" || ext === ".pptm") {
+        convertFilter = "pdf:impress_pdf_Export";
+      }
 
-    try {
-      await execFileAsync(sofficePath, args, {
-        timeout: 30000,
-        env: { ...process.env, PYTHONHOME: undefined, PYTHONPATH: undefined },
-      });
+      const args = [
+        `-env:UserInstallation=${userProfileUri}`,
+        "--headless",
+        "--invisible",
+        "--nologo",
+        "--nodefault",
+        "--nofirststartwizard",
+        "--nolockcheck",
+        "--convert-to",
+        convertFilter,
+        "--outdir",
+        tempDir,
+        inputPath,
+      ];
 
-      // Converted PDF will have the same basename as input, but with .pdf
-      let outputPath = path.join(tempDir, "input.pdf");
-      if (!existsSync(outputPath)) {
-        const { readdirSync } = await import("fs");
-        const files = readdirSync(tempDir);
-        const matched = files.find((f) => f.toLowerCase().endsWith(".pdf"));
-        if (matched) {
-          outputPath = path.join(tempDir, matched);
+      try {
+        await execFileAsync(sofficePath, args, {
+          timeout: 30000,
+          env: { ...process.env, PYTHONHOME: undefined, PYTHONPATH: undefined },
+        });
+
+        // Converted PDF will have the same basename as input, but with .pdf
+        let outputPath = path.join(tempDir, "input.pdf");
+        if (!existsSync(outputPath)) {
+          const { readdirSync } = await import("fs");
+          const files = readdirSync(tempDir);
+          const matched = files.find((f) => f.toLowerCase().endsWith(".pdf"));
+          if (matched) {
+            outputPath = path.join(tempDir, matched);
+          }
         }
-      }
 
-      if (existsSync(outputPath)) {
-        pdfBuffer = await readFile(outputPath);
+        if (existsSync(outputPath)) {
+          pdfBuffer = await readFile(outputPath);
+        }
+      } catch (loErr) {
+        console.warn("LibreOffice direct office-to-pdf subprocess had an issue:", loErr);
       }
-    } catch (loErr) {
-      console.warn("LibreOffice direct office-to-pdf subprocess had an issue:", loErr);
     }
 
     // Zero-failure fallback for text and ODT formats

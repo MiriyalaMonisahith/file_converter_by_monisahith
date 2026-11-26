@@ -97,71 +97,88 @@ export async function POST(req: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     await writeFile(inputPath, Buffer.from(arrayBuffer));
 
-    // Execute conversion with LibreOffice, with automated zero-failure fallback
-    const sofficePath = findLibreOfficePath();
-    const userProfileUri = `file:///${userProfileDir.split(path.sep).join("/")}`;
-
-    // Clean, direct headless conversion flags that preserve exact layout, text, and details
-    const args = [
-      `-env:UserInstallation=${userProfileUri}`,
-      "--headless",
-      "--invisible",
-      "--nologo",
-      "--nodefault",
-      "--nofirststartwizard",
-      "--nolockcheck",
-    ];
-
-    // Specify input filter before --convert-to if importing PDF
-    if (ext === ".pdf" && (targetFormat === "odt" || targetFormat === "docx" || targetFormat === "txt" || targetFormat === "html")) {
-      args.push("--infilter=writer_pdf_import");
-    }
-
-    // Determine optimal export filter name
-    let filterSpec = targetFormat;
-    if (targetFormat === "pdf") {
-      if (ext === ".odt" || ext === ".doc" || ext === ".docx" || ext === ".rtf" || ext === ".txt" || ext === ".html" || ext === ".htm") {
-        filterSpec = "pdf:writer_pdf_Export";
-      } else if (ext === ".xls" || ext === ".xlsx" || ext === ".csv") {
-        filterSpec = "pdf:calc_pdf_Export";
-      } else if (ext === ".ppt" || ext === ".pptx" || ext === ".pps" || ext === ".ppsx" || ext === ".pptm") {
-        filterSpec = "pdf:impress_pdf_Export";
-      }
-    } else if (targetFormat === "odt") {
-      filterSpec = "odt:writer8";
-    } else if (targetFormat === "docx") {
-      filterSpec = "docx";
-    } else if (targetFormat === "txt") {
-      filterSpec = "txt:Text (encoded):UTF8";
-    } else if (targetFormat === "html") {
-      filterSpec = "html:XHTML Writer File:UTF8";
-    }
-
-    args.push("--convert-to", filterSpec, "--outdir", tempDir, inputPath);
-
     let outputBuffer: Buffer | null = null;
+    const isPresentation = [".ppt", ".pptx", ".pps", ".ppsx", ".pptm"].includes(ext);
 
-    try {
-      await execFileAsync(sofficePath, args, {
-        timeout: 30000,
-        env: { ...process.env, PYTHONHOME: undefined, PYTHONPATH: undefined },
-      });
-
-      // Identify output file
-      let expectedOutput = path.join(tempDir, `input.${targetFormat}`);
-      if (!existsSync(expectedOutput)) {
-        const files = readdirSync(tempDir);
-        const matched = files.find((f) => f.toLowerCase().endsWith(`.${targetFormat}`));
-        if (matched) {
-          expectedOutput = path.join(tempDir, matched);
+    // 1. Primary Microsoft PowerPoint Engine: Exact 1:1 pixel-perfect native slide fidelity
+    if (isPresentation && targetFormat === "pdf") {
+      try {
+        const { convertWithMicrosoftPowerPoint } = await import("@/lib/engines/powerpoint-native");
+        const expectedOutput = path.join(tempDir, `input.pdf`);
+        const msSuccess = await convertWithMicrosoftPowerPoint(inputPath, expectedOutput);
+        if (msSuccess && existsSync(expectedOutput)) {
+          outputBuffer = await readFile(expectedOutput);
         }
+      } catch (msErr) {
+        console.warn("Microsoft PowerPoint native COM conversion had an issue, falling back to LibreOffice:", msErr);
+      }
+    }
+
+    // 2. Execute conversion with LibreOffice if not already converted
+    if (!outputBuffer) {
+      const sofficePath = findLibreOfficePath();
+      const userProfileUri = `file:///${userProfileDir.split(path.sep).join("/")}`;
+
+      // Clean, direct headless conversion flags that preserve exact layout, text, and details
+      const args = [
+        `-env:UserInstallation=${userProfileUri}`,
+        "--headless",
+        "--invisible",
+        "--nologo",
+        "--nodefault",
+        "--nofirststartwizard",
+        "--nolockcheck",
+      ];
+
+      // Specify input filter before --convert-to if importing PDF
+      if (ext === ".pdf" && (targetFormat === "odt" || targetFormat === "docx" || targetFormat === "txt" || targetFormat === "html")) {
+        args.push("--infilter=writer_pdf_import");
       }
 
-      if (existsSync(expectedOutput)) {
-        outputBuffer = await readFile(expectedOutput);
+      // Determine optimal export filter name
+      let filterSpec = targetFormat;
+      if (targetFormat === "pdf") {
+        if (ext === ".odt" || ext === ".doc" || ext === ".docx" || ext === ".rtf" || ext === ".txt" || ext === ".html" || ext === ".htm") {
+          filterSpec = "pdf:writer_pdf_Export";
+        } else if (ext === ".xls" || ext === ".xlsx" || ext === ".csv") {
+          filterSpec = "pdf:calc_pdf_Export";
+        } else if (ext === ".ppt" || ext === ".pptx" || ext === ".pps" || ext === ".ppsx" || ext === ".pptm") {
+          filterSpec = "pdf:impress_pdf_Export";
+        }
+      } else if (targetFormat === "odt") {
+        filterSpec = "odt:writer8";
+      } else if (targetFormat === "docx") {
+        filterSpec = "docx";
+      } else if (targetFormat === "txt") {
+        filterSpec = "txt:Text (encoded):UTF8";
+      } else if (targetFormat === "html") {
+        filterSpec = "html:XHTML Writer File:UTF8";
       }
-    } catch (loError) {
-      console.warn("LibreOffice subprocess conversion had an issue, checking native fallback:", loError);
+
+      args.push("--convert-to", filterSpec, "--outdir", tempDir, inputPath);
+
+      try {
+        await execFileAsync(sofficePath, args, {
+          timeout: 30000,
+          env: { ...process.env, PYTHONHOME: undefined, PYTHONPATH: undefined },
+        });
+
+        // Identify output file
+        let expectedOutput = path.join(tempDir, `input.${targetFormat}`);
+        if (!existsSync(expectedOutput)) {
+          const files = readdirSync(tempDir);
+          const matched = files.find((f) => f.toLowerCase().endsWith(`.${targetFormat}`));
+          if (matched) {
+            expectedOutput = path.join(tempDir, matched);
+          }
+        }
+
+        if (existsSync(expectedOutput)) {
+          outputBuffer = await readFile(expectedOutput);
+        }
+      } catch (loError) {
+        console.warn("LibreOffice subprocess conversion had an issue, checking native fallback:", loError);
+      }
     }
 
     // High-Precision Zero-Failure Native Fallbacks
