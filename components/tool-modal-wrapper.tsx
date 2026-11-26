@@ -1,9 +1,10 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Sparkles, Cpu, Server } from "lucide-react";
 import { ToolDefinition } from "@/types/tools";
+import { TOOLS_REGISTRY } from "@/config/tools";
 import { FileUploader } from "@/components/file-uploader";
 
 // Studio components
@@ -29,14 +30,39 @@ import { PhotoEnhancerStudio } from "./studios/photo-enhancer-studio";
 
 interface ToolModalWrapperProps {
   tool: ToolDefinition | null;
+  initialFile?: File | null;
   onClose: () => void;
 }
 
-export function ToolModalWrapper({ tool, onClose }: ToolModalWrapperProps) {
-  if (!tool) return null;
+export function ToolModalWrapper({ tool, initialFile, onClose }: ToolModalWrapperProps) {
+  const [activeTool, setActiveTool] = useState<ToolDefinition | null>(tool);
+  const [currentFile, setCurrentFile] = useState<File | null>(initialFile || null);
+
+  useEffect(() => {
+    setActiveTool(tool);
+  }, [tool]);
+
+  useEffect(() => {
+    setCurrentFile(initialFile || null);
+  }, [initialFile]);
+
+  if (!activeTool) return null;
+
+  const handleChainWorkflow = (targetToolId: string, outputBlob?: Blob, fileName?: string) => {
+    const nextTool = TOOLS_REGISTRY.find((t) => t.id === targetToolId);
+    if (nextTool) {
+      if (outputBlob) {
+        const nextFile = new File([outputBlob], fileName || "document.pdf", {
+          type: outputBlob.type || "application/pdf",
+        });
+        setCurrentFile(nextFile);
+      }
+      setActiveTool(nextTool);
+    }
+  };
 
   const renderToolBody = () => {
-    switch (tool.id) {
+    switch (activeTool.id) {
       // PDF Interactive Studios
       case "sign-pdf":
         return <SignPdfStudio />;
@@ -87,9 +113,12 @@ export function ToolModalWrapper({ tool, onClose }: ToolModalWrapperProps) {
       default:
         return (
           <FileUploader
-            tool={tool}
+            key={`${activeTool.id}-${currentFile?.name || "new"}`}
+            tool={activeTool}
             multiple={true}
-            actionButtonText={`Process with ${tool.name}`}
+            initialFile={currentFile}
+            onChainWorkflow={handleChainWorkflow}
+            actionButtonText={`Process with ${activeTool.name}`}
           />
         );
     }
@@ -117,9 +146,9 @@ export function ToolModalWrapper({ tool, onClose }: ToolModalWrapperProps) {
         <div className="mb-6 space-y-1.5 pr-8">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-rose-500">
-              {tool.section ? `${tool.section.toUpperCase()} UTILITY` : tool.category.replace("-", " ")}
+              {activeTool.section ? `${activeTool.section.toUpperCase()} UTILITY` : activeTool.category.replace("-", " ")}
             </span>
-            {tool.environment === "client" ? (
+            {activeTool.environment === "client" ? (
               <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                 <Cpu className="w-3 h-3" />
                 Browser Only
@@ -132,10 +161,10 @@ export function ToolModalWrapper({ tool, onClose }: ToolModalWrapperProps) {
             )}
           </div>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-foreground">
-            {tool.name}
+            {activeTool.name}
           </h2>
           <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-            {tool.description}
+            {activeTool.description}
           </p>
         </div>
 

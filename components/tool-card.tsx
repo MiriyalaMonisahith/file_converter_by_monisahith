@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
@@ -40,6 +40,8 @@ import {
   Sparkles,
   FileType,
   Wand2,
+  Star,
+  Info,
 } from "lucide-react";
 import { ToolDefinition } from "@/types/tools";
 import { cn } from "@/lib/utils";
@@ -83,9 +85,17 @@ const ICON_MAP: Record<string, React.ElementType> = {
 interface ToolCardProps {
   tool: ToolDefinition;
   onSelect?: (tool: ToolDefinition) => void;
+  isFavorite?: boolean;
+  onToggleFavorite?: (toolId: string) => void;
 }
 
-export function ToolCard({ tool, onSelect }: ToolCardProps) {
+export function ToolCard({
+  tool,
+  onSelect,
+  isFavorite = false,
+  onToggleFavorite,
+}: ToolCardProps) {
+  const [showTooltip, setShowTooltip] = useState(false);
   const IconComponent = ICON_MAP[tool.iconName] || FileText;
 
   const content = (
@@ -93,7 +103,7 @@ export function ToolCard({ tool, onSelect }: ToolCardProps) {
       whileHover={{ y: -4, scale: 1.01 }}
       whileTap={{ scale: 0.99 }}
       transition={{ duration: 0.2 }}
-      className="group relative h-full flex flex-col justify-between p-6 rounded-2xl bg-card border border-border/70 hover:border-foreground/20 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 overflow-hidden cursor-pointer"
+      className="group relative h-full flex flex-col justify-between p-6 rounded-2xl bg-card border border-border/70 hover:border-foreground/30 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 overflow-hidden cursor-pointer"
     >
       {/* Top subtle glow on hover */}
       <div
@@ -104,7 +114,7 @@ export function ToolCard({ tool, onSelect }: ToolCardProps) {
       />
 
       <div>
-        {/* Header: Icon & Environment Badge */}
+        {/* Header: Icon, Environment Badge & Star Pin */}
         <div className="flex items-center justify-between mb-4">
           <div
             className={cn(
@@ -116,16 +126,63 @@ export function ToolCard({ tool, onSelect }: ToolCardProps) {
           </div>
 
           <div className="flex items-center gap-1.5">
-            {tool.environment === "client" ? (
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                <Cpu className="w-3 h-3" />
-                Browser Only
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                <Server className="w-3 h-3" />
-                Serverless
-              </span>
+            {/* Privacy Badge with Hover Tooltip */}
+            <div
+              className="relative"
+              onMouseEnter={() => setShowTooltip(true)}
+              onMouseLeave={() => setShowTooltip(false)}
+            >
+              {tool.environment === "client" ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 cursor-help">
+                  <Cpu className="w-3 h-3" />
+                  Browser Only
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 cursor-help">
+                  <Server className="w-3 h-3" />
+                  Serverless
+                </span>
+              )}
+
+              {/* Informative Privacy Tooltip */}
+              {showTooltip && (
+                <div className="absolute right-0 top-full mt-1.5 w-56 p-2 rounded-xl bg-popover/95 backdrop-blur-md border border-border shadow-xl text-[11px] text-popover-foreground z-30 leading-snug animate-in fade-in duration-150">
+                  {tool.environment === "client" ? (
+                    <div>
+                      <strong className="text-emerald-500 block mb-0.5">100% In-Browser Privacy</strong>
+                      Processed entirely in your browser memory via WebAssembly. Your file never touches a server.
+                    </div>
+                  ) : (
+                    <div>
+                      <strong className="text-blue-500 block mb-0.5">Ephemeral Sandbox</strong>
+                      Processed in an isolated serverless runner with zero storage retention. Memory is immediately purged.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Star Favorite Button */}
+            {onToggleFavorite && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  onToggleFavorite(tool.id);
+                }}
+                className={cn(
+                  "p-1.5 rounded-full border transition-all duration-150",
+                  isFavorite
+                    ? "bg-amber-500/10 border-amber-500/30 text-amber-500 hover:bg-amber-500/20"
+                    : "border-transparent text-muted-foreground/40 hover:text-amber-500 hover:bg-muted/80 opacity-0 group-hover:opacity-100"
+                )}
+                title={isFavorite ? "Unpin from favorites" : "Pin to favorites"}
+              >
+                <Star
+                  className={cn("w-3.5 h-3.5", isFavorite && "fill-amber-500")}
+                />
+              </button>
             )}
           </div>
         </div>

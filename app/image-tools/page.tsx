@@ -4,7 +4,8 @@ import React, { useState, useMemo } from "react";
 import { Navbar } from "@/components/navbar";
 import { ToolCard } from "@/components/tool-card";
 import { ToolModalWrapper } from "@/components/tool-modal-wrapper";
-import { TOOLS_REGISTRY, SECTIONS_CONFIG } from "@/config/tools";
+import { useFavorites } from "@/hooks/use-favorites";
+import { TOOLS_REGISTRY, SECTIONS_CONFIG, SECTION_TOOL_COUNTS } from "@/config/tools";
 import { ToolDefinition } from "@/types/tools";
 import {
   ImagePlus,
@@ -21,6 +22,7 @@ export default function ImageToolsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSubfilter, setSelectedSubfilter] = useState<string>("all");
   const [activeModalTool, setActiveModalTool] = useState<ToolDefinition | null>(null);
+  const { toggleFavorite, isFavorite } = useFavorites();
 
   const imageTools = useMemo(() => {
     return TOOLS_REGISTRY.filter((tool) => {
@@ -75,7 +77,7 @@ export default function ImageToolsPage() {
         {/* Filters */}
         <div className="flex items-center justify-start sm:justify-center overflow-x-auto pb-2 scrollbar-none gap-2">
           {[
-            { id: "all", label: "All Image Tools (9)" },
+            { id: "all", label: `All Image Tools (${SECTION_TOOL_COUNTS.image})` },
             { id: "optimize", label: "Enhance, Compress & Resize" },
             { id: "convert", label: "Format Converters" },
             { id: "creative", label: "Redact, Watermark & Palette" },
@@ -114,6 +116,8 @@ export default function ImageToolsPage() {
             <ToolCard
               key={tool.id}
               tool={tool}
+              isFavorite={isFavorite(tool.id)}
+              onToggleFavorite={toggleFavorite}
               onSelect={(t) => setActiveModalTool(t)}
             />
           ))}

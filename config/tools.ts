@@ -20,7 +20,7 @@ export const SECTIONS_CONFIG: SectionMeta[] = [
     description:
       "All PDF utilities engineered for zero data storage, high performance, and standard PDF compliance.",
     route: "/pdf-tools",
-    accentGradient: "from-rose-500 via-red-500 to-amber-500",
+    accentGradient: "from-rose-600 via-red-600 to-amber-600",
     iconName: "FileText",
   },
   {
@@ -31,7 +31,7 @@ export const SECTIONS_CONFIG: SectionMeta[] = [
     description:
       "Seamless cross-format conversion suite supporting Microsoft Office formats, Markdown, and TXT.",
     route: "/document-tools",
-    accentGradient: "from-blue-500 via-indigo-500 to-cyan-500",
+    accentGradient: "from-blue-600 via-indigo-600 to-cyan-600",
     iconName: "Presentation",
   },
   {
@@ -42,7 +42,7 @@ export const SECTIONS_CONFIG: SectionMeta[] = [
     description:
       "Instant client-side developer and copywriter text manipulation toolkit with live stats.",
     route: "/text-tools",
-    accentGradient: "from-violet-500 via-purple-500 to-pink-500",
+    accentGradient: "from-violet-600 via-purple-600 to-pink-600",
     iconName: "Type",
   },
   {
@@ -53,7 +53,7 @@ export const SECTIONS_CONFIG: SectionMeta[] = [
     description:
       "Hardware-accelerated HTML5 Canvas graphics suite for privacy-first image editing and optimization.",
     route: "/image-tools",
-    accentGradient: "from-emerald-500 via-teal-500 to-cyan-500",
+    accentGradient: "from-emerald-600 via-teal-600 to-cyan-600",
     iconName: "ImagePlus",
   },
 ];
@@ -814,3 +814,13 @@ export const CATEGORIES = [
   { id: "image-tools", label: "Image Tools" },
   { id: "security-optimize", label: "Security & Optimize" },
 ] as const;
+
+export const TOTAL_TOOLS_COUNT = TOOLS_REGISTRY.length;
+
+export const SECTION_TOOL_COUNTS = {
+  pdf: TOOLS_REGISTRY.filter((t) => t.section === "pdf").length,
+  document: TOOLS_REGISTRY.filter((t) => t.section === "document").length,
+  text: TOOLS_REGISTRY.filter((t) => t.section === "text").length,
+  image: TOOLS_REGISTRY.filter((t) => t.section === "image").length,
+} as const;
+

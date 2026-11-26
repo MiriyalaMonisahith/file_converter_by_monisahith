@@ -24,6 +24,11 @@ import {
   TrendingDown,
   Sparkles,
   Lock,
+  PenTool,
+  Stamp,
+  Wand2,
+  FileText,
+  Image as ImageIcon,
 } from "lucide-react";
 import { UploadedFileItem, ToolDefinition, CompressionPreset } from "@/types/tools";
 import { formatFileSize, cn } from "@/lib/utils";
@@ -53,6 +58,8 @@ interface FileUploaderProps {
   maxFiles?: number;
   acceptedFormats?: Record<string, string[]>;
   actionButtonText?: string;
+  initialFile?: File | null;
+  onChainWorkflow?: (targetToolId: string, outputBlob?: Blob, fileName?: string) => void;
 }
 
 // Concurrency limit for multi-file batch conversions
@@ -64,10 +71,29 @@ export function FileUploader({
   maxFiles,
   acceptedFormats = { "application/pdf": [".pdf"] },
   actionButtonText,
+  initialFile,
+  onChainWorkflow,
 }: FileUploaderProps) {
   const [fileItems, setFileItems] = useState<UploadedFileItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
+
+  // Sync initialFile if pre-loaded from Smart Dropzone or Chained Workflow
+  React.useEffect(() => {
+    if (initialFile) {
+      setFileItems([
+        {
+          id: Math.random().toString(36).substring(7),
+          file: initialFile,
+          status: "idle",
+          progress: 0,
+        },
+      ]);
+      setMergedBlob(null);
+      setMergedDownloadUrl(null);
+      setGlobalError(null);
+    }
+  }, [initialFile, tool?.id]);
 
   // Speed & Size Optimization Presets (only for compress-pdf or image-to-pdf)
   const [compressionPreset, setCompressionPreset] = useState<CompressionPreset>("balanced");
@@ -492,6 +518,34 @@ export function FileUploader({
   const completedCount = fileItems.filter((i) => i.status === "completed").length;
   const allCompleted = fileItems.length > 0 && completedCount === fileItems.length;
 
+  // Active completed output blob for chained workflows (either merged output or single file output)
+  const activeCompletedBlob =
+    mergedBlob ||
+    (fileItems.length === 1 && fileItems[0].status === "completed" ? fileItems[0].outputBlob : null);
+
+  const activeCompletedName =
+    (mergedBlob ? `${tool?.id || "merged"}-output.pdf` : null) ||
+    (fileItems.length === 1 && fileItems[0].status === "completed"
+      ? fileItems[0].convertedFileName || `${fileItems[0].file.name.replace(/\.[^/.]+$/, "")}.pdf`
+      : "output.pdf");
+
+  const isOutputPdf =
+    activeCompletedName?.toLowerCase().endsWith(".pdf") ||
+    activeCompletedBlob?.type === "application/pdf";
+
+  const isOutputImage =
+    /\.(jpe?g|png|webp)$/i.test(activeCompletedName || "") ||
+    activeCompletedBlob?.type?.startsWith("image/");
+
+  const handleNextStepToolClick = (targetToolId: string) => {
+    if (!activeCompletedBlob) return;
+    if (onChainWorkflow) {
+      onChainWorkflow(targetToolId, activeCompletedBlob, activeCompletedName || "output.pdf");
+    } else {
+      window.location.href = `/tools/${targetToolId}`;
+    }
+  };
+
   return (
     <div className="w-full max-w-4xl mx-auto space-y-5">
       {/* Top Banner: Privacy & Tool Controls */}
@@ -909,6 +963,116 @@ export function FileUploader({
                 </div>
               ))}
             </div>
+
+            {/* Chained Workflow / Next Step Bar */}
+            {activeCompletedBlob && (
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-rose-500/10 via-purple-500/10 to-blue-500/10 border border-rose-500/25 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-rose-500" />
+                    <span className="text-xs font-bold text-foreground">
+                      Chained Next Steps
+                    </span>
+                    <span className="text-[11px] text-muted-foreground hidden sm:inline">
+                      (Pass output directly into the next tool without re-uploading)
+                    </span>
+                  </div>
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-rose-600 dark:text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
+                    Zero Re-upload
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                  {isOutputPdf && (
+                    <>
+                      {tool?.id !== "compress-pdf" && (
+                        <button
+                          type="button"
+                          onClick={() => handleNextStepToolClick("compress-pdf")}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card hover:bg-muted border border-border/80 text-xs font-semibold text-foreground hover:border-rose-500/40 shadow-sm transition-all"
+                        >
+                          <Gauge className="w-3.5 h-3.5 text-blue-500" />
+                          <span>Compress PDF</span>
+                        </button>
+                      )}
+                      {tool?.id !== "protect-pdf" && (
+                        <button
+                          type="button"
+                          onClick={() => handleNextStepToolClick("protect-pdf")}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card hover:bg-muted border border-border/80 text-xs font-semibold text-foreground hover:border-rose-500/40 shadow-sm transition-all"
+                        >
+                          <Lock className="w-3.5 h-3.5 text-rose-500" />
+                          <span>Protect PDF</span>
+                        </button>
+                      )}
+                      {tool?.id !== "sign-pdf" && (
+                        <button
+                          type="button"
+                          onClick={() => handleNextStepToolClick("sign-pdf")}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card hover:bg-muted border border-border/80 text-xs font-semibold text-foreground hover:border-rose-500/40 shadow-sm transition-all"
+                        >
+                          <PenTool className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>Sign PDF</span>
+                        </button>
+                      )}
+                      {tool?.id !== "watermark-pdf" && (
+                        <button
+                          type="button"
+                          onClick={() => handleNextStepToolClick("watermark-pdf")}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card hover:bg-muted border border-border/80 text-xs font-semibold text-foreground hover:border-rose-500/40 shadow-sm transition-all"
+                        >
+                          <Stamp className="w-3.5 h-3.5 text-amber-500" />
+                          <span>Watermark</span>
+                        </button>
+                      )}
+                      {tool?.id !== "pdf-to-word" && (
+                        <button
+                          type="button"
+                          onClick={() => handleNextStepToolClick("pdf-to-word")}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card hover:bg-muted border border-border/80 text-xs font-semibold text-foreground hover:border-rose-500/40 shadow-sm transition-all"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-cyan-500" />
+                          <span>Convert to Word</span>
+                        </button>
+                      )}
+                    </>
+                  )}
+                  {isOutputImage && (
+                    <>
+                      {tool?.id !== "photo-enhancer" && (
+                        <button
+                          type="button"
+                          onClick={() => handleNextStepToolClick("photo-enhancer")}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card hover:bg-muted border border-border/80 text-xs font-semibold text-foreground hover:border-rose-500/40 shadow-sm transition-all"
+                        >
+                          <Wand2 className="w-3.5 h-3.5 text-fuchsia-500" />
+                          <span>AI Photo Enhancer</span>
+                        </button>
+                      )}
+                      {tool?.id !== "image-compressor" && (
+                        <button
+                          type="button"
+                          onClick={() => handleNextStepToolClick("image-compressor")}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card hover:bg-muted border border-border/80 text-xs font-semibold text-foreground hover:border-rose-500/40 shadow-sm transition-all"
+                        >
+                          <Gauge className="w-3.5 h-3.5 text-emerald-500" />
+                          <span>Compress Image</span>
+                        </button>
+                      )}
+                      {tool?.id !== "image-to-pdf" && (
+                        <button
+                          type="button"
+                          onClick={() => handleNextStepToolClick("image-to-pdf")}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card hover:bg-muted border border-border/80 text-xs font-semibold text-foreground hover:border-rose-500/40 shadow-sm transition-all"
+                        >
+                          <ImageIcon className="w-3.5 h-3.5 text-rose-500" />
+                          <span>Convert to PDF</span>
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Bottom Actions */}
             <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-border/60">

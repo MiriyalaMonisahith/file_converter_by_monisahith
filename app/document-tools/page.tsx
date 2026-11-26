@@ -4,7 +4,8 @@ import React, { useState, useMemo } from "react";
 import { Navbar } from "@/components/navbar";
 import { ToolCard } from "@/components/tool-card";
 import { ToolModalWrapper } from "@/components/tool-modal-wrapper";
-import { TOOLS_REGISTRY, SECTIONS_CONFIG } from "@/config/tools";
+import { useFavorites } from "@/hooks/use-favorites";
+import { TOOLS_REGISTRY, SECTIONS_CONFIG, SECTION_TOOL_COUNTS } from "@/config/tools";
 import { ToolDefinition } from "@/types/tools";
 import {
   Presentation,
@@ -21,6 +22,7 @@ export default function DocumentToolsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSubfilter, setSelectedSubfilter] = useState<string>("all");
   const [activeModalTool, setActiveModalTool] = useState<ToolDefinition | null>(null);
+  const { toggleFavorite, isFavorite } = useFavorites();
 
   const documentTools = useMemo(() => {
     return TOOLS_REGISTRY.filter((tool) => {
@@ -71,7 +73,7 @@ export default function DocumentToolsPage() {
         <div className="max-w-4xl mx-auto text-center space-y-6">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-semibold tracking-wide">
             <Presentation className="w-3.5 h-3.5" />
-            <span>Document & Office Suite &bull; Word, Excel, PPT, ODT, TXT & Markdown</span>
+            <span>Document & Office Suite &bull; {SECTION_TOOL_COUNTS.document} Tools &bull; Word, Excel, PPT, ODT, TXT & Markdown</span>
           </div>
 
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-foreground leading-[1.15]">
@@ -93,7 +95,7 @@ export default function DocumentToolsPage() {
         {/* Filters */}
         <div className="flex items-center justify-start sm:justify-center overflow-x-auto pb-2 scrollbar-none gap-2">
           {[
-            { id: "all", label: "All Document Tools (15)" },
+            { id: "all", label: `All Document Tools (${SECTION_TOOL_COUNTS.document})` },
             { id: "odt-suite", label: "ODT Suite & Studio (6)" },
             { id: "office-pdf", label: "Office to PDF" },
             { id: "pdf-to-word", label: "PDF to Word / ODT" },
@@ -134,6 +136,8 @@ export default function DocumentToolsPage() {
             <ToolCard
               key={tool.id}
               tool={tool}
+              isFavorite={isFavorite(tool.id)}
+              onToggleFavorite={toggleFavorite}
               onSelect={(t) => setActiveModalTool(t)}
             />
           ))}

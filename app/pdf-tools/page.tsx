@@ -4,7 +4,8 @@ import React, { useState, useMemo } from "react";
 import { Navbar } from "@/components/navbar";
 import { ToolCard } from "@/components/tool-card";
 import { ToolModalWrapper } from "@/components/tool-modal-wrapper";
-import { TOOLS_REGISTRY, SECTIONS_CONFIG } from "@/config/tools";
+import { useFavorites } from "@/hooks/use-favorites";
+import { TOOLS_REGISTRY, SECTIONS_CONFIG, SECTION_TOOL_COUNTS } from "@/config/tools";
 import { ToolDefinition } from "@/types/tools";
 import {
   FileText,
@@ -23,6 +24,7 @@ export default function PdfToolsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSubfilter, setSelectedSubfilter] = useState<string>("all");
   const [activeModalTool, setActiveModalTool] = useState<ToolDefinition | null>(null);
+  const { toggleFavorite, isFavorite } = useFavorites();
 
   const sectionMeta = SECTIONS_CONFIG.find((s) => s.id === "pdf")!;
 
@@ -62,7 +64,7 @@ export default function PdfToolsPage() {
         <div className="max-w-4xl mx-auto text-center space-y-6">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-semibold tracking-wide">
             <FileText className="w-3.5 h-3.5" />
-            <span>Dedicated PDF Engine &bull; 12 Tools &bull; 100% In-Browser</span>
+            <span>Dedicated PDF Engine &bull; {SECTION_TOOL_COUNTS.pdf} Tools &bull; 100% In-Browser</span>
           </div>
 
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-foreground leading-[1.15]">
@@ -84,7 +86,7 @@ export default function PdfToolsPage() {
         {/* Filter Pills */}
         <div className="flex items-center justify-start sm:justify-center overflow-x-auto pb-2 scrollbar-none gap-2">
           {[
-            { id: "all", label: "All PDF Tools (12)" },
+            { id: "all", label: `All PDF Tools (${SECTION_TOOL_COUNTS.pdf})` },
             { id: "organize", label: "Organize & Sign" },
             { id: "security", label: "Security & Optimize" },
             { id: "convert", label: "Convert & Render" },
@@ -125,6 +127,8 @@ export default function PdfToolsPage() {
             <ToolCard
               key={tool.id}
               tool={tool}
+              isFavorite={isFavorite(tool.id)}
+              onToggleFavorite={toggleFavorite}
               onSelect={(t) => setActiveModalTool(t)}
             />
           ))}

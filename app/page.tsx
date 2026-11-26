@@ -5,7 +5,10 @@ import Link from "next/link";
 import { Navbar } from "@/components/navbar";
 import { ToolCard } from "@/components/tool-card";
 import { ToolModalWrapper } from "@/components/tool-modal-wrapper";
-import { TOOLS_REGISTRY, CATEGORIES, SECTIONS_CONFIG } from "@/config/tools";
+import { HeroSmartDropzone } from "@/components/hero-smart-dropzone";
+import { PinnedTools } from "@/components/pinned-tools";
+import { useFavorites } from "@/hooks/use-favorites";
+import { TOOLS_REGISTRY, CATEGORIES, SECTIONS_CONFIG, TOTAL_TOOLS_COUNT, SECTION_TOOL_COUNTS } from "@/config/tools";
 import { ToolDefinition, MainSection } from "@/types/tools";
 import {
   ShieldCheck,
@@ -33,6 +36,21 @@ export default function HomePage() {
   const [selectedSection, setSelectedSection] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [activeModalTool, setActiveModalTool] = useState<ToolDefinition | null>(null);
+  const [modalInitialFile, setModalInitialFile] = useState<File | null>(null);
+
+  const { favorites, toggleFavorite, isFavorite, isLoaded } = useFavorites();
+
+  const favoriteTools = useMemo(() => {
+    if (!isLoaded) return [];
+    return favorites
+      .map((id) => TOOLS_REGISTRY.find((t) => t.id === id))
+      .filter((t): t is ToolDefinition => Boolean(t));
+  }, [favorites, isLoaded]);
+
+  const handleLaunchToolWithFile = (tool: ToolDefinition, file: File) => {
+    setModalInitialFile(file);
+    setActiveModalTool(tool);
+  };
 
   // Filter tools based on section and search query (strictly no intermixing)
   const filteredTools = useMemo(() => {
@@ -53,7 +71,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground transition-colors duration-200">
-      {/* Top Navbar */}
+      {/* Top Navbar with Cmd+K Command Palette */}
       <Navbar searchQuery={searchQuery} onSearchChange={setSearchQuery} />
 
       {/* Hero Section */}
@@ -63,7 +81,7 @@ export default function HomePage() {
         <div className="max-w-4xl mx-auto text-center space-y-6">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-semibold tracking-wide">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Open Source Suite &bull; 41 Tools Across 4 Categories &bull; Zero Paywalls</span>
+            <span>Open Source Suite &bull; {TOTAL_TOOLS_COUNT} Tools Across {SECTIONS_CONFIG.length} Categories &bull; Zero Paywalls</span>
           </div>
 
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-foreground leading-[1.15]">
@@ -79,16 +97,9 @@ export default function HomePage() {
             No daily quotas, no hidden subscriptions, and your private files never leave your device.
           </p>
 
-          {/* Quick inline quick-action dropzone trigger */}
-          <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
-            <button
-              onClick={() => setActiveModalTool(TOOLS_REGISTRY[0])}
-              className="inline-flex items-center gap-2.5 px-6 py-3 rounded-2xl bg-foreground text-background font-semibold text-xs sm:text-sm hover:opacity-90 transition-all shadow-md hover:shadow-lg"
-            >
-              <Zap className="w-4 h-4 text-amber-400" />
-              Quick Merge Drop Zone
-              <ArrowRight className="w-4 h-4" />
-            </button>
+          {/* Interactive Instant-Drop Hero Drop Zone */}
+          <div className="pt-2 max-w-2xl mx-auto w-full text-left">
+            <HeroSmartDropzone onLaunchToolWithFile={handleLaunchToolWithFile} />
           </div>
         </div>
       </section>
@@ -108,9 +119,17 @@ export default function HomePage() {
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <div
-                      className={`w-10 h-10 rounded-xl bg-gradient-to-br ${sec.accentGradient} flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform`}
+                      className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${sec.accentGradient} flex items-center justify-center text-white shadow-lg ${
+                        sec.id === "pdf"
+                          ? "shadow-rose-500/30 ring-1 ring-rose-500/30"
+                          : sec.id === "document"
+                          ? "shadow-blue-500/30 ring-1 ring-blue-500/30"
+                          : sec.id === "text"
+                          ? "shadow-purple-500/30 ring-1 ring-purple-500/30"
+                          : "shadow-emerald-500/30 ring-1 ring-emerald-500/30"
+                      } border border-white/20 dark:border-white/10 group-hover:scale-105 transition-transform duration-300`}
                     >
-                      <Icon className="w-5 h-5" />
+                      <Icon className="w-5 h-5 stroke-[2.25] text-white drop-shadow-sm" />
                     </div>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted border border-border/60 text-muted-foreground">
                       {toolCount} Tools
@@ -136,14 +155,26 @@ export default function HomePage() {
 
       {/* Main Tools Catalog */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
+        {/* Pinned & Favorite Tools Row */}
+        {favoriteTools.length > 0 && (
+          <PinnedTools
+            favoriteTools={favoriteTools}
+            onSelectTool={(tool) => {
+              setModalInitialFile(null);
+              setActiveModalTool(tool);
+            }}
+            onToggleFavorite={toggleFavorite}
+          />
+        )}
+
         {/* Category Filter Tabs */}
         <div className="flex items-center justify-start sm:justify-center overflow-x-auto pb-2 scrollbar-none gap-2">
           {[
-            { id: "all", label: "All 41 Tools" },
-            { id: "pdf", label: "PDF Tools (12)" },
-            { id: "document", label: "Document & ODT (15)" },
-            { id: "text", label: "Text Tools (6)" },
-            { id: "image", label: "Image Tools (8)" },
+            { id: "all", label: `All Tools (${TOTAL_TOOLS_COUNT})` },
+            { id: "pdf", label: `PDF Tools (${SECTION_TOOL_COUNTS.pdf})` },
+            { id: "document", label: `Document & ODT (${SECTION_TOOL_COUNTS.document})` },
+            { id: "text", label: `Text Tools (${SECTION_TOOL_COUNTS.text})` },
+            { id: "image", label: `Image Tools (${SECTION_TOOL_COUNTS.image})` },
           ].map((cat) => {
             const isActive = selectedSection === cat.id;
             return (
@@ -183,7 +214,12 @@ export default function HomePage() {
             <ToolCard
               key={tool.id}
               tool={tool}
-              onSelect={(t) => setActiveModalTool(t)}
+              isFavorite={isFavorite(tool.id)}
+              onToggleFavorite={toggleFavorite}
+              onSelect={(t) => {
+                setModalInitialFile(null);
+                setActiveModalTool(t);
+              }}
             />
           ))}
         </div>
@@ -258,7 +294,11 @@ export default function HomePage() {
         {activeModalTool && (
           <ToolModalWrapper
             tool={activeModalTool}
-            onClose={() => setActiveModalTool(null)}
+            initialFile={modalInitialFile}
+            onClose={() => {
+              setActiveModalTool(null);
+              setModalInitialFile(null);
+            }}
           />
         )}
       </AnimatePresence>
