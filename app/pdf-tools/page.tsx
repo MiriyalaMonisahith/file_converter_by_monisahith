@@ -7,6 +7,7 @@ import { ToolModalWrapper } from "@/components/tool-modal-wrapper";
 import { useFavorites } from "@/hooks/use-favorites";
 import { TOOLS_REGISTRY, SECTIONS_CONFIG, SECTION_TOOL_COUNTS } from "@/config/tools";
 import { ToolDefinition } from "@/types/tools";
+import { cn } from "@/lib/utils";
 import {
   FileText,
   ShieldCheck,
@@ -83,23 +84,47 @@ export default function PdfToolsPage() {
 
       {/* Main Tool Grid */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
-        {/* Filter Pills */}
+        {/* Filter Pills with signature colors */}
         <div className="flex items-center justify-start sm:justify-center overflow-x-auto pb-2 scrollbar-none gap-2">
           {[
-            { id: "all", label: `All PDF Tools (${SECTION_TOOL_COUNTS.pdf})` },
-            { id: "organize", label: "Organize & Sign" },
-            { id: "security", label: "Security & Optimize" },
-            { id: "convert", label: "Convert & Render" },
-            { id: "browser", label: "100% In-Browser" },
+            {
+              id: "all",
+              label: `All PDF Tools (${SECTION_TOOL_COUNTS.pdf})`,
+              activeColor: "bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-rose-600/25 border-transparent",
+              idleColor: "bg-rose-500/5 hover:bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/25 hover:border-rose-500/40",
+            },
+            {
+              id: "organize",
+              label: "Organize & Sign",
+              activeColor: "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-600/25 border-transparent",
+              idleColor: "bg-indigo-500/5 hover:bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/25 hover:border-indigo-500/40",
+            },
+            {
+              id: "security",
+              label: "Security & Optimize",
+              activeColor: "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/25 border-transparent",
+              idleColor: "bg-emerald-500/5 hover:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/25 hover:border-emerald-500/40",
+            },
+            {
+              id: "convert",
+              label: "Convert & Render",
+              activeColor: "bg-gradient-to-r from-sky-600 to-blue-600 text-white shadow-md shadow-sky-600/25 border-transparent",
+              idleColor: "bg-sky-500/5 hover:bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/25 hover:border-sky-500/40",
+            },
+            {
+              id: "browser",
+              label: "100% In-Browser",
+              activeColor: "bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md shadow-amber-600/25 border-transparent",
+              idleColor: "bg-amber-500/5 hover:bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/25 hover:border-amber-500/40",
+            },
           ].map((pill) => (
             <button
               key={pill.id}
               onClick={() => setSelectedSubfilter(pill.id)}
-              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all duration-200 ${
-                selectedSubfilter === pill.id
-                  ? "bg-rose-600 text-white shadow-md shadow-rose-600/25 scale-[1.02]"
-                  : "bg-card hover:bg-muted/80 text-muted-foreground hover:text-foreground border border-border/60"
-              }`}
+              className={cn(
+                "px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap border transition-all duration-200",
+                selectedSubfilter === pill.id ? cn(pill.activeColor, "scale-[1.02]") : pill.idleColor
+              )}
             >
               {pill.label}
             </button>

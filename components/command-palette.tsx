@@ -319,7 +319,18 @@ export function CommandPalette({ isOpen, onClose, onSelectTool }: CommandPalette
                               Recent
                             </span>
                           )}
-                          <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded-full bg-muted/70 text-muted-foreground border border-border/50">
+                          <span
+                            className={cn(
+                              "text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded-full border",
+                              tool.section === "pdf"
+                                ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30"
+                                : tool.section === "document"
+                                ? "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30"
+                                : tool.section === "text"
+                                ? "bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30"
+                                : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                            )}
+                          >
                             {tool.section}
                           </span>
                         </div>

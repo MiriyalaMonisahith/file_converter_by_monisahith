@@ -10,6 +10,7 @@ import { PinnedTools } from "@/components/pinned-tools";
 import { useFavorites } from "@/hooks/use-favorites";
 import { TOOLS_REGISTRY, CATEGORIES, SECTIONS_CONFIG, TOTAL_TOOLS_COUNT, SECTION_TOOL_COUNTS } from "@/config/tools";
 import { ToolDefinition, MainSection } from "@/types/tools";
+import { cn } from "@/lib/utils";
 import {
   ShieldCheck,
   Zap,
@@ -167,25 +168,49 @@ export default function HomePage() {
           />
         )}
 
-        {/* Category Filter Tabs */}
+        {/* Category Filter Tabs with signature colors for every category */}
         <div className="flex items-center justify-start sm:justify-center overflow-x-auto pb-2 scrollbar-none gap-2">
           {[
-            { id: "all", label: `All Tools (${TOTAL_TOOLS_COUNT})` },
-            { id: "pdf", label: `PDF Tools (${SECTION_TOOL_COUNTS.pdf})` },
-            { id: "document", label: `Document & ODT (${SECTION_TOOL_COUNTS.document})` },
-            { id: "text", label: `Text Tools (${SECTION_TOOL_COUNTS.text})` },
-            { id: "image", label: `Image Tools (${SECTION_TOOL_COUNTS.image})` },
+            {
+              id: "all",
+              label: `All Tools (${TOTAL_TOOLS_COUNT})`,
+              activeColor: "bg-gradient-to-r from-red-600 via-rose-500 to-amber-500 text-white shadow-md shadow-rose-500/25 border-transparent",
+              idleColor: "bg-card hover:bg-rose-500/5 text-foreground/80 hover:text-rose-500 border-border/70 hover:border-rose-500/30",
+            },
+            {
+              id: "pdf",
+              label: `PDF Tools (${SECTION_TOOL_COUNTS.pdf})`,
+              activeColor: "bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-rose-600/25 border-transparent",
+              idleColor: "bg-rose-500/5 hover:bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/25 hover:border-rose-500/40",
+            },
+            {
+              id: "document",
+              label: `Document & ODT (${SECTION_TOOL_COUNTS.document})`,
+              activeColor: "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/25 border-transparent",
+              idleColor: "bg-blue-500/5 hover:bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/25 hover:border-blue-500/40",
+            },
+            {
+              id: "text",
+              label: `Text Tools (${SECTION_TOOL_COUNTS.text})`,
+              activeColor: "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md shadow-purple-600/25 border-transparent",
+              idleColor: "bg-purple-500/5 hover:bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/25 hover:border-purple-500/40",
+            },
+            {
+              id: "image",
+              label: `Image Tools (${SECTION_TOOL_COUNTS.image})`,
+              activeColor: "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/25 border-transparent",
+              idleColor: "bg-emerald-500/5 hover:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/25 hover:border-emerald-500/40",
+            },
           ].map((cat) => {
             const isActive = selectedSection === cat.id;
             return (
               <button
                 key={cat.id}
                 onClick={() => setSelectedSection(cat.id)}
-                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all duration-200 ${
-                  isActive
-                    ? "bg-rose-600 text-white shadow-md shadow-rose-600/25 scale-[1.02]"
-                    : "bg-card hover:bg-muted/80 text-muted-foreground hover:text-foreground border border-border/60"
-                }`}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap border transition-all duration-200",
+                  isActive ? cn(cat.activeColor, "scale-[1.02]") : cat.idleColor
+                )}
               >
                 {cat.label}
               </button>

@@ -7,6 +7,7 @@ import { ToolModalWrapper } from "@/components/tool-modal-wrapper";
 import { useFavorites } from "@/hooks/use-favorites";
 import { TOOLS_REGISTRY, SECTIONS_CONFIG, SECTION_TOOL_COUNTS } from "@/config/tools";
 import { ToolDefinition } from "@/types/tools";
+import { cn } from "@/lib/utils";
 import {
   Type,
   ShieldCheck,
@@ -75,23 +76,47 @@ export default function TextToolsPage() {
 
       {/* Main Grid */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
-        {/* Filters */}
+        {/* Subfilters with distinct signature colors */}
         <div className="flex items-center justify-start sm:justify-center overflow-x-auto pb-2 scrollbar-none gap-2">
           {[
-            { id: "all", label: `All Text Tools (${SECTION_TOOL_COUNTS.text})` },
-            { id: "format", label: "Case & Cleaner" },
-            { id: "analytics", label: "Stats & Diff Checker" },
-            { id: "encoder", label: "Base64 & URL Encoder" },
-            { id: "pdf-text", label: "PDF to Text" },
+            {
+              id: "all",
+              label: `All Text Tools (${SECTION_TOOL_COUNTS.text})`,
+              activeColor: "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md shadow-purple-600/25 border-transparent",
+              idleColor: "bg-purple-500/5 hover:bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/25 hover:border-purple-500/40",
+            },
+            {
+              id: "format",
+              label: "Case & Cleaner",
+              activeColor: "bg-gradient-to-r from-pink-600 to-rose-600 text-white shadow-md shadow-pink-600/25 border-transparent",
+              idleColor: "bg-pink-500/5 hover:bg-pink-500/15 text-pink-600 dark:text-pink-400 border-pink-500/25 hover:border-pink-500/40",
+            },
+            {
+              id: "analytics",
+              label: "Stats & Diff Checker",
+              activeColor: "bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-md shadow-blue-600/25 border-transparent",
+              idleColor: "bg-blue-500/5 hover:bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/25 hover:border-blue-500/40",
+            },
+            {
+              id: "encoder",
+              label: "Base64 & URL Encoder",
+              activeColor: "bg-gradient-to-r from-amber-600 to-emerald-600 text-white shadow-md shadow-amber-600/25 border-transparent",
+              idleColor: "bg-amber-500/5 hover:bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/25 hover:border-amber-500/40",
+            },
+            {
+              id: "pdf-text",
+              label: "PDF to Text",
+              activeColor: "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-600/25 border-transparent",
+              idleColor: "bg-violet-500/5 hover:bg-violet-500/15 text-violet-600 dark:text-violet-400 border-violet-500/25 hover:border-violet-500/40",
+            },
           ].map((pill) => (
             <button
               key={pill.id}
               onClick={() => setSelectedSubfilter(pill.id)}
-              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all duration-200 ${
-                selectedSubfilter === pill.id
-                  ? "bg-purple-600 text-white shadow-md shadow-purple-600/25 scale-[1.02]"
-                  : "bg-card hover:bg-muted/80 text-muted-foreground hover:text-foreground border border-border/60"
-              }`}
+              className={cn(
+                "px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap border transition-all duration-200",
+                selectedSubfilter === pill.id ? cn(pill.activeColor, "scale-[1.02]") : pill.idleColor
+              )}
             >
               {pill.label}
             </button>

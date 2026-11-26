@@ -106,10 +106,18 @@ export function ToolCard({
       transition={{ duration: 0.2 }}
       className="group relative h-full flex flex-col justify-between p-6 rounded-2xl bg-card border border-border/70 hover:border-foreground/30 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 overflow-hidden cursor-pointer"
     >
-      {/* Top subtle glow on hover */}
+      {/* Top signature color accent bar */}
       <div
         className={cn(
-          "absolute -right-12 -top-12 w-32 h-32 rounded-full opacity-10 blur-2xl transition-opacity group-hover:opacity-30 bg-gradient-to-br",
+          "absolute top-0 left-0 right-0 h-1 bg-gradient-to-r opacity-90 group-hover:opacity-100 transition-opacity",
+          tool.accentColor
+        )}
+      />
+
+      {/* Top ambient color glow */}
+      <div
+        className={cn(
+          "absolute -right-12 -top-12 w-36 h-36 rounded-full opacity-15 blur-2xl transition-all duration-300 group-hover:opacity-40 bg-gradient-to-br pointer-events-none",
           tool.accentColor
         )}
       />
@@ -198,15 +206,26 @@ export function ToolCard({
         </p>
       </div>
 
-      {/* Footer tags */}
+      {/* Footer tags with colored badges */}
       <div className="mt-5 pt-4 border-t border-border/50 flex items-center justify-between text-xs text-muted-foreground/80">
         <ConverterFormatBadge toolId={tool.id} size="sm" />
         {!CONVERTER_FORMATS[tool.id] && (
-          <span className="font-mono text-[11px] uppercase tracking-wider font-medium text-foreground/70">
-            Output: {tool.outputFormat}
+          <span
+            className={cn(
+              "text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border",
+              tool.section === "pdf"
+                ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30"
+                : tool.section === "document"
+                ? "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30"
+                : tool.section === "text"
+                ? "bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30"
+                : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+            )}
+          >
+            {tool.outputFormat}
           </span>
         )}
-        <span className="text-[11px] font-medium text-primary group-hover:underline">
+        <span className="text-[11px] font-semibold text-primary group-hover:underline">
           Open tool →
         </span>
       </div>

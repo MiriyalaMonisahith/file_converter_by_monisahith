@@ -27,11 +27,41 @@ interface NavbarProps {
 }
 
 const NAV_LINKS = [
-  { href: "/", label: "All Tools", icon: LayoutGrid },
-  { href: "/pdf-tools", label: "PDF Tools", icon: FileText },
-  { href: "/document-tools", label: "Document Tools", icon: Presentation },
-  { href: "/text-tools", label: "Text Tools", icon: Type },
-  { href: "/image-tools", label: "Image Tools", icon: ImagePlus },
+  {
+    href: "/",
+    label: "All Tools",
+    icon: LayoutGrid,
+    activeColor: "text-foreground",
+    activeBadge: "bg-background text-foreground shadow-xs border-border/80",
+  },
+  {
+    href: "/pdf-tools",
+    label: "PDF Tools",
+    icon: FileText,
+    activeColor: "text-rose-600 dark:text-rose-400",
+    activeBadge: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/25",
+  },
+  {
+    href: "/document-tools",
+    label: "Document Tools",
+    icon: Presentation,
+    activeColor: "text-blue-600 dark:text-blue-400",
+    activeBadge: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/25",
+  },
+  {
+    href: "/text-tools",
+    label: "Text Tools",
+    icon: Type,
+    activeColor: "text-purple-600 dark:text-purple-400",
+    activeBadge: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/25",
+  },
+  {
+    href: "/image-tools",
+    label: "Image Tools",
+    icon: ImagePlus,
+    activeColor: "text-emerald-600 dark:text-emerald-400",
+    activeBadge: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25",
+  },
 ];
 
 export function Navbar({ searchQuery = "", onSearchChange }: NavbarProps) {
@@ -80,13 +110,13 @@ export function Navbar({ searchQuery = "", onSearchChange }: NavbarProps) {
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150",
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 border",
                     isActive
-                      ? "bg-background text-foreground shadow-sm border border-border/60 text-primary"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                      ? cn("shadow-xs", item.activeBadge)
+                      : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   )}
                 >
-                  <Icon className={cn("w-3.5 h-3.5", isActive ? "text-rose-500" : "text-muted-foreground")} />
+                  <Icon className={cn("w-3.5 h-3.5", isActive ? item.activeColor : "text-muted-foreground")} />
                   <span>{item.label}</span>
                 </Link>
               );
@@ -171,13 +201,13 @@ export function Navbar({ searchQuery = "", onSearchChange }: NavbarProps) {
                     href={item.href}
                     onClick={() => setMobileMenuOpen(false)}
                     className={cn(
-                      "flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all",
+                      "flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all border",
                       isActive
-                        ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30"
-                        : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/40"
+                        ? item.activeBadge
+                        : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/40"
                     )}
                   >
-                    <Icon className={cn("w-3.5 h-3.5", isActive ? "text-rose-500" : "text-muted-foreground")} />
+                    <Icon className={cn("w-3.5 h-3.5", isActive ? item.activeColor : "text-muted-foreground")} />
                     <span>{item.label}</span>
                   </Link>
                 );
