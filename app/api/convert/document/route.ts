@@ -98,6 +98,7 @@ export async function POST(req: NextRequest) {
     await writeFile(inputPath, Buffer.from(arrayBuffer));
 
     let outputBuffer: Buffer | null = null;
+    let isNativeOffice = false;
     const isPresentation = [".ppt", ".pptx", ".pps", ".ppsx", ".pptm"].includes(ext);
 
     // 1. Primary Microsoft PowerPoint Engine: Exact 1:1 pixel-perfect native slide fidelity
@@ -108,6 +109,7 @@ export async function POST(req: NextRequest) {
         const msSuccess = await convertWithMicrosoftPowerPoint(inputPath, expectedOutput);
         if (msSuccess && existsSync(expectedOutput)) {
           outputBuffer = await readFile(expectedOutput);
+          isNativeOffice = true;
         }
       } catch (msErr) {
         console.warn("Microsoft PowerPoint native COM conversion had an issue, falling back to LibreOffice:", msErr);
@@ -227,8 +229,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // If output is PDF, optimize object streams if possible
-    if (targetFormat === "pdf") {
+    // If output is PDF and not already native Microsoft Office PDF, optimize object streams if possible
+    if (targetFormat === "pdf" && !isNativeOffice) {
       try {
         const { PDFDocument } = await import("pdf-lib");
         const pdfDoc = await PDFDocument.load(outputBuffer, { ignoreEncryption: true });

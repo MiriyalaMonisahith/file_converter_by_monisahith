@@ -1,7 +1,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import path from "path";
-import { existsSync } from "fs";
+import { existsSync, statSync } from "fs";
 
 const execFileAsync = promisify(execFile);
 
@@ -13,7 +13,7 @@ const execFileAsync = promisify(execFile);
 export async function convertWithMicrosoftPowerPoint(
   inputPath: string,
   outputPath: string,
-  timeoutMs = 45000
+  timeoutMs = 60000
 ): Promise<boolean> {
   if (process.platform !== "win32") {
     return false;
@@ -25,7 +25,7 @@ export async function convertWithMicrosoftPowerPoint(
   }
 
   try {
-    await execFileAsync(
+    const { stdout, stderr } = await execFileAsync(
       "powershell.exe",
       [
         "-NoProfile",
@@ -42,11 +42,11 @@ export async function convertWithMicrosoftPowerPoint(
       { timeout: timeoutMs }
     );
 
-    if (existsSync(outputPath)) {
+    if (existsSync(outputPath) && statSync(outputPath).size > 0) {
       return true;
     }
   } catch (err: any) {
-    console.warn("Microsoft PowerPoint native engine error, proceeding to fallback:", err?.message || err);
+    console.warn("Microsoft PowerPoint native engine error:", err?.message || err);
   }
 
   return false;
